@@ -1,0 +1,55 @@
+<html>
+
+<head>
+    <title>{{headline}}</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta http-equiv="x-ua-compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width" intitial-scale="1" maximum-scale="1">
+    <meta name="robots" content="noindex">
+    <script src="https://ajax.aspnetcdn.com/ajax/jQuery/jquery-2.1.1.min.js"></script>
+    <script src="https://ajax.aspnetcdn.com/ajax/jquery.validate/1.13.1/jquery.validate.min.js"></script>
+    <script src="https://ajax.aspnetcdn.com/ajax/mvc/5.1/jquery.validate.unobtrusive.min.js"></script>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css">
+    <link rel="stylesheet" href="/css/LNbs.css">
+    <!-- CDF: No CSS dependencies were declared //-->
+    <link href="/css/splashBlocks.css" rel="stylesheet">
+    <link rel="stylesheet" href="/css/HybrideCui.css">
+    <script src="/scripts/customValidation.js"></script>
+    <script src="/scripts/Hy.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700,300italic,400italic,700italic" rel="stylesheet">
+    <link href="/css/iconFonts.css" rel="stylesheet">
+    <link href="/images/favicon.ico" rel="shortcut icon">
+</head>
+
+<body>
+    <div id="main-wrapper">
+        <div class="row">
+            <div class="col-md-offset-2 col-md-8">
+                <div class="fulldoc" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:nitf="http://iptc.org/std/NITF/2006-10-18/" xmlns:c="custom">
+                    <center>
+                        <h4>{{ headline }}
+                        </h4>
+                    </center><br>
+                    <div class="publicationName">
+                        <center>
+                            <publicationname xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">{{ pub_name }}</publicationname>
+                        </center>
+                    </div><br>
+                    <center>{{ pub_date }}</center>
+                    <div><b>Length: </b>{{ wordcount }} words
+                    </div>
+                    <div><b>Byline: </b>{{ byline }}</div><br>
+                    {{ bodytext}}
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+    </div>
+    </div>
+    </div>
+</body>
+
+</html>
