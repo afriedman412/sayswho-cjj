@@ -11,6 +11,8 @@ class quoteAttributor:
     Assumes text is pre-processed. (This is downstream of any soup processing!)
 
     TODO: Raise error (or warning?) if multiple clusters match.
+    TODO: Quotation errors still happen, need to account:
+    67CN-9C61-F03F-K4G3-00000-00
     """
     def __init__(self, diff: int=5):
         """

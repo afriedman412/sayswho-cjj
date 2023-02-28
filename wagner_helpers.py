@@ -14,13 +14,14 @@ from itertools import combinations
 from collections import Counter
 from tqdm import tqdm
 
-creds = json.load(open("creds.json"))
-
 def get_access_token(
     url="https://auth-api.lexisnexis.com/oauth/v2/token", 
+    creds=None
+):  
+    if not creds:
+        creds = json.load(open("creds.json"))
     client_id=creds['LN_CLIENT_ID'],
     client_secret=creds['LN_CLIENT_SECRET']
-):
     response = requests.post(
         url,
         data={"grant_type": "client_credentials"},
@@ -30,6 +31,7 @@ def get_access_token(
     
 class docLoader:
     def __init__(self):
+        creds = json.load(open("creds.json"))
         self.engine = create_engine(
             f"mysql://{creds['MYSQL_USER']}:{creds['MYSQL_PW']}@{creds['MYSQL_URL']}/{creds['MYSQL_DB']}"
             )
@@ -66,7 +68,7 @@ class docLoader:
         return next(d for d in data if doc_id in d['ResultId'])
 
 def extract_soup(data):
-    soup = BeautifulSoup(data['Document']['Content'], 'lxml')
+    soup = BeautifulSoup(data['Document']['Content'], 'features="lxml"')
     return soup
 
 def indexer_parser(soup):
@@ -95,7 +97,7 @@ def indexer_parser(soup):
 def get_metadata(soup, body=False):
     context = {  # your variables to pass to template
         'doc_id': soup.id.text.replace("urn:contentItem:", ""),
-        'headline': soup.find("nitf:hedline").text if soup.find("nitf:hedline") else "",
+        'headline': " - ".join([t.text for t in soup.find("nitf:hedline").find_all()]) if soup.find("nitf:hedline") else "",
         'publication': soup.find("publicationname").text if soup.find("publicationname") else "", 
         'date': soup.datetext.text if soup.datetext else "",
         'byline': soup.nametext.text if soup.nametext else "",
@@ -131,11 +133,14 @@ def fix_quotes(bodytext):
         texts.append(fix_quote(p.text))
     return texts
 
+def biggest_bodytext(soup):
+    return sorted(soup.find_all("bodytext"), key= lambda t: len(t.text), reverse=True)[0]
+
 def format_text(soup, char=" "):
     """
     TODO: Amend with more text to remove
     """
-    t = char.join(fix_quotes(soup.bodytext))
+    t = char.join(fix_quotes(biggest_bodytext(soup)))
     return re.split(r"___ \(c\)20\d{2}", t)[0]
 
 def render_id(doc_id, dl=None):
@@ -147,7 +152,7 @@ def render_id(doc_id, dl=None):
     context['bodytext'] = soup.bodytext
 
     path = './'
-    filename = 'ln_template.html'
+    filename = 'article_template.html'
 
     rendered = Environment(
         loader=FileSystemLoader(path)
@@ -161,24 +166,16 @@ def add_color(rendered, quotes, color="lightgreen"):
             )
     return rendered
 
-# def save_and_launch(doc_id, rendered):
-#     file_name = f"{doc_id}.html"
-
-#     with open(file_name, "w+") as f:
-#         f.write(rendered)
-
-#     os.system(f"open {file_name}")
-
-def quick_render(doc_id, dl=None, quotes=None, color='LightGreen'):
+def quick_render(doc_id, dl=None, quotes=None, save_file=False, color='LightGreen'):
     if not dl:
         dl = docLoader()
     data = dl.load_file(doc_id)
     soup = extract_soup(data)
     context = get_metadata(soup)
-    context['bodytext'] = soup.bodytext
+    context['bodytext'] = biggest_bodytext(soup)
 
     path = './'
-    filename = 'ln_template.html'
+    filename = 'article_template.html'
 
     rendered = Environment(
         loader=FileSystemLoader(path)
@@ -190,7 +187,7 @@ def quick_render(doc_id, dl=None, quotes=None, color='LightGreen'):
                 q, f"<span style=\"background-color: {color};\">{q}</span>"
             )
 
-    file_name = f"{doc_id}.html"
+    file_name = f"{doc_id}.html" if save_file else "temp.html"
 
     with open(file_name, "w+") as f:
         f.write(rendered)
