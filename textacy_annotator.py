@@ -100,4 +100,9 @@ class quoteAttributor:
         print("cluster match:", cluster_match)
         print("cluster match context:", cluster_match.sent)
         print("full cluster:", cluster)
+
+    def prettify_matches(self):
+        for m in self.matches:
+            self.prettify_match(m)
+            print("---")
     
