@@ -33,7 +33,9 @@ class quoteAttributor:
             self.quotes - list of textacy-extracted quotes
         """
         self.doc = self.nlp(t)
-        self.quotes = [q for q in extract.triples.direct_quotations(self.doc)]
+        t_doc = textacy.make_spacy_doc(t, lang="en_core_web_sm")
+        self.quotes = [q for q in extract.triples.direct_quotations(t_doc)]
+        self.parse_entities(t)
 
     def parse_entities(self, t: str):
         """
