@@ -89,16 +89,14 @@ class quoteAttributor:
     def quotes_to_clusters(self):
         matches = []
         for n, q in enumerate(self.quotes):
-            match_ = (n)
             for c in self.doc.spans:
                 if c.startswith("coref_clusters"):
                     match_idx = self.compare_quote_to_cluster(q, self.doc.spans[c])
                     if match_idx:
-                        match_+=(n, c.split("_")[-1], match_idx)
+                        matches.append((n, c.split("_")[-1], match_idx))
                     else:
-                        match_+=(None, None)
+                        matches.append((n, None, None))
 
-                    matches.append(match_)
         return matches
     
     def match_quotes(self):
@@ -108,7 +106,10 @@ class quoteAttributor:
         self.matches = self.quotes_to_clusters()
     
     def load_cluster(self, n):
-        return self.doc.spans[f"coref_clusters_{n}"]
+        try:
+            return self.doc.spans[f"coref_clusters_{n}"]
+        except IndexError:
+            return
     
     def format_cluster_span(self, span, min_length: int=3):
         """
@@ -154,7 +155,7 @@ class quoteAttributor:
     def prettify_match(self, match: tuple):
         quote = self.quotes[match[0]]
         cluster = self.load_cluster(match[1])
-        cluster_match = cluster[match[2]]
+        cluster_match = cluster[match[2]] if cluster else None
 
         print("quote:", quote.content)
         print("speaker:", ' '.join([s.text for s in quote.speaker]))
