@@ -8,21 +8,7 @@ import json
 from bs4 import BeautifulSoup
 from collections import Counter
 import regex as re
-from sqlalchemy import create_engine
-
-def make_engine():
-    """
-    Convenience function to load sqlalchemy engine.
-    """
-    MYSQL_URL = "rcg-mysql3.cyfinfkbv6lq.us-east-2.rds.amazonaws.com"
-    MYSQL_USER = "admin"
-    MYSQL_PW = "$c1BpJeZqAMI"
-    MYSQL_DB = "wagner"
-
-    engine = create_engine(
-            f"mysql://{MYSQL_USER}:{MYSQL_PW}@{MYSQL_URL}/{MYSQL_DB}"
-            )
-    return engine
+from jinja2 import Environment, FileSystemLoader
 
 def full_parse(data, char=" "):
     """
@@ -141,33 +127,31 @@ def get_metadata(soup):
 
 def render_data(data, quotes=None, save_file=False, color='LightGreen'):
     """
-    
+    Note that the quotes in here have been fixed -- not exactly equal to article text.
     """
     soup = extract_soup(data)
-    context = get_metadata(soup)
-    context['bodytext'] = biggest_bodytext(soup)
+    metadata = get_metadata(soup)
+    metadata['bodytext'] = biggest_bodytext(soup)
 
     path = './'
-    filename = 'article_template.html'
+    template_name = 'article_template.html'
 
     rendered = Environment(
         loader=FileSystemLoader(path)
-    ).get_template(filename).render(context)
+    ).get_template(template_name).render(metadata)
+    rendered = fix_quotes(rendered)
 
     if quotes:
         for q in quotes:
             rendered = rendered.replace(
-                q, f"<span style=\"background-color: {color};\">{q}</span>"
+                q.content.text, 
+                f"<span style=\"background-color: {color};\">{q.content.text}</span>"
             )
 
-    file_name = f"{doc_id}.html" if save_file else "temp.html"
+    file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
 
     with open(file_name, "w+") as f:
         f.write(rendered)
-
-    os.system(f"open {file_name}")
-
-
 
 
 

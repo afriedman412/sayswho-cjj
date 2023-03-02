@@ -10,6 +10,12 @@ class quoteAttributor:
 
     Assumes text is pre-processed. (This is downstream of any soup processing!)
 
+    TODO: Return all quotes, even if they can't be attributed
+    TODO: same model in spacy and textacy -- you don't need to make a doc with both!
+    TODO: lite spacy model only for tokenization!
+    TODO: pre-load textacy like you pre-load spacy?
+    TODO: add quote class for clarity
+
     TODO: Raise error (or warning?) if multiple clusters match.
     TODO: Quotation errors still happen, need to account:
     67CN-9C61-F03F-K4G3-00000-00
@@ -98,7 +104,7 @@ class quoteAttributor:
         cluster_match = cluster[match[2]]
 
         print("quote:", quote.content)
-        print("speaker:", quote.speaker[0])
+        print("speaker:", ' '.join([s.text for s in quote.speaker]))
         print("cluster match:", cluster_match)
         print("cluster match context:", cluster_match.sent)
         print("full cluster:", cluster)
