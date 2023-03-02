@@ -10,12 +10,6 @@ class quoteAttributor:
 
     Assumes text is pre-processed. (This is downstream of any soup processing!)
 
-    TODO: Return all quotes, even if they can't be attributed
-    TODO: same model in spacy and textacy -- you don't need to make a doc with both!
-    TODO: lite spacy model only for tokenization!
-    TODO: pre-load textacy like you pre-load spacy?
-    TODO: add quote class for clarity
-
     TODO: Raise error (or warning?) if multiple clusters match.
     TODO: Quotation errors still happen, need to account:
     67CN-9C61-F03F-K4G3-00000-00
@@ -25,6 +19,7 @@ class quoteAttributor:
         So you don't have to initiate the spacy model every time.
         """
         self.nlp = spacy.load("en_coreference_web_trf")
+        self.ner_nlp = spacy.load("en_core_web_sm")
         self.diff = diff
         return
     
@@ -34,12 +29,25 @@ class quoteAttributor:
             t (string) - formatted text of an article
             
         Ouput:
+            self.doc - spacy coref-parsed doc
             self.quotes - list of textacy-extracted quotes
-            self.clusters - spacy-parsed entity clusters
         """
         self.doc = self.nlp(t)
-        t_doc = textacy.make_spacy_doc(t, lang='en_core_web_sm')
-        self.quotes = [q for q in extract.triples.direct_quotations(t_doc)]
+        self.quotes = [q for q in extract.triples.direct_quotations(self.doc)]
+
+    def parse_entities(self, t: str):
+        """
+        I was having trouble getting the coref model to return entities, so this uses a smaller spacy model to do that.
+
+        Input:
+            t (string) - formatted text of an article
+
+        Output:
+            self.ner_doc - spacy-parsed doc
+            self.ent_index (dict) - {entity start: entity label}
+        """
+        self.ner_doc = self.ner_nlp(t)
+        self.ent_index = {e.start:e for e in self.ner_doc.ents}
         
     def compare_quote_to_cluster_member(
             self, 
@@ -67,7 +75,7 @@ class quoteAttributor:
             cluster: List[spacy.tokens.span.Span]
         ):
         """
-        Returns first match. Doesn't consider further matches. Is s this a problem?
+        Returns first match. Doesn't consider further matches. Is this a problem?
         """
         try:
             return next(
@@ -79,11 +87,16 @@ class quoteAttributor:
     def quotes_to_clusters(self):
         matches = []
         for n, q in enumerate(self.quotes):
+            match_ = (n)
             for c in self.doc.spans:
                 if c.startswith("coref_clusters"):
                     match_idx = self.compare_quote_to_cluster(q, self.doc.spans[c])
                     if match_idx:
-                        matches.append((n, c.split("_")[-1], match_idx))
+                        match_+=(n, c.split("_")[-1], match_idx)
+                    else:
+                        match_+=(None, None)
+
+                    matches.append(match_)
         return matches
     
     def match_quotes(self):
@@ -94,9 +107,47 @@ class quoteAttributor:
     
     def load_cluster(self, n):
         return self.doc.spans[f"coref_clusters_{n}"]
+    
+    def format_cluster_span(self, span, min_length: int=3):
+        """
+        Filters out spans of less than "min_length" and finds the index and label of any entities in the span.
+
+        Input:
+            span - span from a cluster
+            min_length (int) - minimum length of span to return (in characters, not tokens)
+
+        Output:
+            spans (list) - list of spans and, if applicable, index and label of any entities in the span.
+        """
+        if len(span.text) > min_length:
+            spans = [span]
+            for t in span:
+                if t.i in self.ent_index:
+                    spans.append((t.i, self.ent_index[t.i].label_))
+            return spans
+        else:
+            return
         
+    def format_cluster(self, cluster, min_length: int=3):
+        """
+        Runs format_cluster_span on all spans, removes duplicates and sorts by reverse length.
+
+        Might be a problem here with removing duplicates early!
+        """
+        return [
+            self.format_cluster_span(s, min_length) for s in sorted(
+                list(set([
+            span for span in cluster])
+            ), key=lambda s: len(s.text), reverse=True)
+            ]
+    
     def parse_match(self, match: tuple):
-        return self.quotes[match[0]], self.load_cluster(match[1])[match[2]]
+        quote = self.quotes[match[0]]
+        if match[1]:
+            cluster = self.format_cluster(self.load_cluster(match[1])[match[2]])
+        else:
+            cluster = None
+        return quote, cluster
     
     def prettify_match(self, match: tuple):
         quote = self.quotes[match[0]]
