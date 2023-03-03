@@ -89,14 +89,15 @@ class quoteAttributor:
     def quotes_to_clusters(self):
         matches = []
         for n, q in enumerate(self.quotes):
+            matched = False
             for c in self.doc.spans:
                 if c.startswith("coref_clusters"):
                     match_idx = self.compare_quote_to_cluster(q, self.doc.spans[c])
                     if match_idx:
                         matches.append((n, c.split("_")[-1], match_idx))
-                    else:
-                        matches.append((n, None, None))
-
+                        matched = True
+            if not matched:
+                matches.append((n, None, None))
         return matches
     
     def match_quotes(self):
