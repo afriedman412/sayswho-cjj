@@ -154,7 +154,7 @@ class quoteAttributor:
     
     def prettify_match(self, match: tuple):
         quote = self.quotes[match[0]]
-        cluster = self.load_cluster(match[1])
+        cluster = self.load_cluster(match[1]) if match[1] else None
         cluster_match = cluster[match[2]] if cluster else None
 
         print("quote:", quote.content)
