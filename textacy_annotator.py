@@ -159,9 +159,11 @@ class quoteAttributor:
 
         print("quote:", quote.content)
         print("speaker:", ' '.join([s.text for s in quote.speaker]))
-        print("cluster match:", cluster_match)
-        print("cluster match context:", cluster_match.sent)
-        print("full cluster:", cluster)
+
+        if cluster_match:
+            print("cluster match:", cluster_match)
+            print("cluster match context:", cluster_match.sent)
+            print("full cluster:", cluster)
 
     def prettify_matches(self):
         for m in self.matches:
