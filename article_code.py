@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from collections import Counter
 import regex as re
 from jinja2 import Environment, FileSystemLoader
+from textacy import preprocessing
 
 def full_parse(data, char=" "):
     """
@@ -69,33 +70,74 @@ def biggest_bodytext(soup):
         soup - soup of article
 
     Output:
-        longbest bodytext object in soup
+        longest bodytext object in soup
     """
     return sorted(soup.find_all("bodytext"), key= lambda t: len(t.text), reverse=True)[0]
 
-def fix_quotes(t: str) -> str:
+def fix_quotes(t, mask="@"):
     """
-    Adjusts quotation marks that are problematic for spacy and textacy. Designed for maximum throughput not accuracy, so kind of sloppy!
+    Adjusts quotation marks that are problematic for textacy.
+
+    Masks single quotes with "@", to be replaced after quote parsing.
 
     Input:
         t (str) - article text
 
     Output:
         t (str) - article text with fixed quotations
+
+    TODO: revert internal quotes?
     """
     # replace fancy quotes
-    t = re.sub(r"[“”]", r'"', t)
-    t = re.sub(r"[‘’]", r"'", t)
+    t = preprocessing.normalize.quotation_marks(t)
 
-    # replace (gramatically correct) hanging apostrophes with "'s" so textacy doesnt get fooled
+    # add space pre- or post- quotation mark if missing (because quote parser relies on the quote/space construction)
+    t = fix_bad_quote_spaces(t)
+
+    ## edit a couple gramatically correct constructions that confuse the quote parser
+    # replace hanging apostrophes on s-plurals with apostrophe-s
     t = t.replace("s\' ", "s\'s ")
 
-    # add quotation mark to end of any paragraph with an odd number of quotation marks, assuming this is a (gramatically correct) dropped quotation mark
+    # add closing quotation marks to paragraph breaks within quotes
     if Counter(t)['"'] % 2:
         t += '\"'
-    for r in re.findall(r"\s(\'.+?\')[\s\"]", t):
-        t = t.replace(r, r[1:-1])
+
+    # handle single qutoation marks
+    # edit out internal quotes
+    for r in re.finditer(r"\s\'(.+?)\'([\s\"])", t):
+        t = t.replace(r[0], " " + r[1] + r[2])
+    
+    # mark all remaining single quotation marks
+    if mask:
+        t = t.replace("\'", mask)
+
     return t
+
+def fix_bad_quote_spaces(text, char='"'):
+    """
+    Inserts a space before or after a quotation mark if it does not have one. Textacy quote parsing assumes quotations are \s\".+\"\s, so missing spaces will mess up parsing.
+
+    Counts number of quotation marks to determine whether to put the space before or after.
+
+    (Actually works for any character, but default is quotation mark.)
+
+    Input:
+        text (str) - text to be cleaned
+        char (str) - character to insert space before or after (default is quotation mark)
+    """
+    test_reg = r"(?<=\S)" + char + r"(?=\S)"
+    
+    # this needs to be iterative because indexes change
+    while re.search(test_reg, text):
+        # get char indexes
+        char_indexes = [n for n,i in enumerate(text) if i==char]    
+
+        bad_char = re.search(test_reg, text)
+        replacer = ' "' if char_indexes.index(bad_char.start()) % 2 else '" '
+
+        text = text[:bad_char.start()] + replacer  + text[bad_char.end():]
+    
+    return text
 
 def clean_article(t):
     """
