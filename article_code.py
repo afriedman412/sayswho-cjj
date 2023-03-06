@@ -11,6 +11,11 @@ import regex as re
 from jinja2 import Environment, FileSystemLoader
 from textacy import preprocessing
 
+def load_articles(engine):
+    return engine.execute(
+            f"SELECT `doc_id` FROM `articleindex`"
+        ).fetchall()
+
 def full_parse(data, char=" "):
     """
     TODO: biggest bodytext or both bodytext?

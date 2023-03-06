@@ -14,13 +14,18 @@ class quoteAttributor:
     TODO: Quotation errors still happen, need to account:
     67CN-9C61-F03F-K4G3-00000-00
     """
-    def __init__(self, diff: int=5):
+    def __init__(self, min_diff: int=5, min_length=3):
         """
         So you don't have to initiate the spacy model every time.
+
+        Input:
+            diff (int) - allowed distance between start characters/indexes in self.compare_quote_to_cluster
+            min_length (int) - minimum length of span to return (in characters, not tokens) in self.format_cluster and self.format_cluster_span
         """
         self.nlp = spacy.load("en_coreference_web_trf")
         self.ner_nlp = spacy.load("en_core_web_sm")
-        self.diff = diff
+        self.min_diff = min_diff
+        self.min_length = min_length
         return
     
     def parse_text(self, t: str):
@@ -67,8 +72,8 @@ class quoteAttributor:
             bool
         """
         return all([
-                abs(q.speaker[0].sent.start_char - cluster_member.sent.start_char) < self.diff,
-                abs(q.speaker[0].idx - cluster_member.start_char) < self.diff
+                abs(q.speaker[0].sent.start_char - cluster_member.sent.start_char) < self.min_diff,
+                abs(q.speaker[0].idx - cluster_member.start_char) < self.min_diff
             ])
         
     def compare_quote_to_cluster(
@@ -77,7 +82,16 @@ class quoteAttributor:
             cluster: List[spacy.tokens.span.Span]
         ):
         """
-        Returns first match. Doesn't consider further matches. Is this a problem?
+        Finds first span in cluster that matches with provided quote.
+        
+        TODO: Doesn't consider further matches. Is this a problem?
+
+        Input:
+            q (quote) - textacy quote object
+            cluster - coref cluster
+
+        Output:
+            n (int) or None - index of cluster member that matches quote (or None, if none match)
         """
         try:
             return next(
@@ -87,6 +101,17 @@ class quoteAttributor:
             return
     
     def quotes_to_clusters(self):
+        """
+        Iterates through quotes found in text, returning matches for each quote.
+
+        Input:
+            None
+
+        Output:
+            matches (tuple) - tuple of quote/cluster matches in the format tuple(quote index, cluster number, index of span in cluster) ...
+
+            If no match is found, there will be an empty match (n, None None).
+        """
         matches = []
         for n, q in enumerate(self.quotes):
             matched = False
@@ -112,18 +137,17 @@ class quoteAttributor:
         except IndexError:
             return
     
-    def format_cluster_span(self, span, min_length: int=3):
+    def format_cluster_span(self, span):
         """
         Filters out spans of less than "min_length" and finds the index and label of any entities in the span.
 
         Input:
             span - span from a cluster
-            min_length (int) - minimum length of span to return (in characters, not tokens)
 
         Output:
             spans (list) - list of spans and, if applicable, index and label of any entities in the span.
         """
-        if len(span.text) > min_length:
+        if len(span.text) > self.min_length: # in characters, not tokens!
             spans = [span]
             for t in span:
                 if t.i in self.ent_index:
@@ -132,23 +156,34 @@ class quoteAttributor:
         else:
             return
         
-    def format_cluster(self, cluster, min_length: int=3):
+    def format_cluster(self, cluster):
         """
         Runs format_cluster_span on all spans, removes duplicates and sorts by reverse length.
 
         Might be a problem here with removing duplicates early!
+
+        Input:
+            cluster - coref cluster
+
+        Output:
+            list of unique spans and any index/label of entities in the span, in the cluster
         """
-        return [
-            self.format_cluster_span(s, min_length) for s in sorted(
-                list(set([
-            span for span in cluster])
-            ), key=lambda s: len(s.text), reverse=True)
-            ]
+        unique_spans = list(set([span for span in cluster]))
+        sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
+        return [self.format_cluster_span(s) for s in sorted_spans]
     
     def parse_match(self, match: tuple):
+        """
+        Input:
+            match (tuple) - a quote/cluster match tuple (quote index, cluster number, index of span in cluster)
+
+        Output:
+            quote - textacy quote
+            cluster - coref cluster
+        """
         quote = self.quotes[match[0]]
         if match[1]:
-            cluster = self.format_cluster(self.load_cluster(match[1])[match[2]])
+            cluster = self.format_cluster(self.load_cluster(match[1]))
         else:
             cluster = None
         return quote, cluster
