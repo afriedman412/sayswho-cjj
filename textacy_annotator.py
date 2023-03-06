@@ -134,7 +134,7 @@ class quoteAttributor:
     def load_cluster(self, n):
         try:
             return self.doc.spans[f"coref_clusters_{n}"]
-        except IndexError:
+        except KeyError:
             return
     
     def format_cluster_span(self, span):
