@@ -227,7 +227,7 @@ class quoteAttributor:
                 self.parse_text(t)
                 self.match_quotes()
                 with open(f"./{file_name}", "a+") as f:
-                    f.write(i + "\n")
+                    f.write(f'**** {i} ****\n')
                     for match in self.matches:
                         self.output_match(match, f)
             except Exception as e:
