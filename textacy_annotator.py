@@ -14,7 +14,7 @@ class quoteAttributor:
     TODO: Quotation errors still happen, need to account:
     67CN-9C61-F03F-K4G3-00000-00
     """
-    def __init__(self, min_diff: int=5, min_length=3):
+    def __init__(self, min_diff: int=5, min_length=0):
         """
         So you don't have to initiate the spacy model every time.
 
@@ -183,7 +183,7 @@ class quoteAttributor:
         """
         quote = self.quotes[match[0]]
         if match[1]:
-            cluster = self.format_cluster(self.load_cluster(match[1]))
+            cluster = [_ for _ in self.format_cluster(self.load_cluster(match[1])) if _]
         else:
             cluster = None
         return quote, cluster

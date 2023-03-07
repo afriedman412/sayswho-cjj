@@ -140,7 +140,7 @@ def fix_bad_quote_spaces(text, char='"'):
         bad_char = re.search(test_reg, text)
         replacer = ' "' if char_indexes.index(bad_char.start()) % 2 else '" '
 
-        text = text[:bad_char.start()] + replacer  + text[bad_char.end():]
+        text = text[:bad_char.start()] + replacer + text[bad_char.end():]
     
     return text
 
