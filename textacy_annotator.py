@@ -3,6 +3,8 @@ import spacy_transformers
 import textacy
 from textacy import extract
 from typing import List
+from tqdm import tqdm
+from article_code import get_json_data, full_parse
 
 class quoteAttributor:
     """
@@ -183,10 +185,13 @@ class quoteAttributor:
         """
         quote = self.quotes[match[0]]
         if match[1]:
-            cluster = [_ for _ in self.format_cluster(self.load_cluster(match[1])) if _]
+            cluster = self.load_cluster(match[1])
+            span_match = cluster[match[2]]
+            cluster = [_ for _ in self.format_cluster(cluster) if _]
         else:
             cluster = None
-        return quote, cluster
+            span_match = None
+        return quote, cluster, span_match
     
     def prettify_match(self, match: tuple):
         quote = self.quotes[match[0]]
@@ -205,4 +210,26 @@ class quoteAttributor:
         for m in self.matches:
             self.prettify_match(m)
             print("---")
+
+    def output_match(self, match, f):
+        quote, cluster, span_match = self.parse_match(match)
+        f.write(f"content: {quote.content.text}, {quote.content.start_char}\n")
+        f.write(f"speaker: {' '.join([s.text for s in quote.speaker])}, {quote.speaker[0].idx}\n")
+        f.write(f"span match: {span_match if cluster else 'NONE'}\n")
+        f.write(f"full cluster: {cluster if cluster else 'NONE'}\n")
+        f.write("-----\n")
+
+    def output_matches(self, ids, file_name, engine):
+        for i in tqdm(ids):
+            data = get_json_data(i, engine)
+            t = full_parse(data)
+            try:
+                self.parse_text(t)
+                self.match_quotes()
+                with open(f"./{file_name}", "a+") as f:
+                    f.write(i + "\n")
+                    for match in self.matches:
+                        self.output_match(match, f)
+            except Exception as e:
+                print(i, e.args)
     
