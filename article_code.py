@@ -138,7 +138,7 @@ def fix_bad_quote_spaces(text, char='"'):
         char_indexes = [n for n,i in enumerate(text) if i==char]    
 
         bad_char = re.search(test_reg, text)
-        replacer = ' "' if char_indexes.index(bad_char.start()) % 2 else '" '
+        replacer = '" ' if char_indexes.index(bad_char.start()) % 2 else ' "'
 
         text = text[:bad_char.start()] + replacer + text[bad_char.end():]
     
@@ -190,15 +190,18 @@ def render_data(data, quotes=None, save_file=False, color='LightGreen'):
 
     if quotes:
         for q in quotes:
+            q_text = q.content.text.replace("@", "'")
             rendered = rendered.replace(
-                q.content.text, 
-                f"<span style=\"background-color: {color};\">{q.content.text}</span>"
+                q_text, 
+                f"<span style=\"background-color: {color};\">{q_text}</span>"
             )
 
     file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
 
     with open(file_name, "w+") as f:
         f.write(rendered)
+
+    return metadata
 
 
 
