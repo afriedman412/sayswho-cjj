@@ -10,6 +10,7 @@ from collections import Counter
 import regex as re
 from jinja2 import Environment, FileSystemLoader
 from textacy import preprocessing
+import warnings
 
 def load_articles(engine):
     return engine.execute(
@@ -34,7 +35,8 @@ def full_parse(data, char=" "):
         texts.append(fix_quotes(p.text))
 
     full_text = char.join(texts)
-    return clean_article(full_text)
+    full_text = clean_article(full_text)
+    return full_text
 
 def get_json_data(doc_id: str, engine, path: str="./query_results_2_2_23/" ) -> dict:
     """
@@ -172,37 +174,89 @@ def get_metadata(soup):
     }
     return metadata 
 
-def render_data(data, quotes=None, save_file=False, color='LightGreen'):
-    """
-    Note that the quotes in here have been fixed -- not exactly equal to article text.
-    """
+def render_basic(data):
     soup = extract_soup(data)
     metadata = get_metadata(soup)
-    metadata['bodytext'] = biggest_bodytext(soup)
-
-    path = './'
-    template_name = 'article_template.html'
-
+    metadata['bodytext'] = "<p>" + full_parse(data, "</p><p>") 
+    
     rendered = Environment(
-        loader=FileSystemLoader(path)
-    ).get_template(template_name).render(metadata)
-    rendered = fix_quotes(rendered)
+        loader=FileSystemLoader("./")
+    ).get_template('article_template.html').render(metadata)
+    rendered = preprocessing.normalize.quotation_marks(rendered)
+    return rendered, metadata
 
-    if quotes:
-        for q in quotes:
-            q_text = q.content.text.replace("@", "'")
-            rendered = rendered.replace(
-                q_text, 
-                f"<span style=\"background-color: {color};\">{q_text}</span>"
+def render_quotes(rendered, quote_matches, color="LightGreen"):
+    for n, (quote, matches) in enumerate(quote_matches):
+        q_text = quote.content.text
+        rendered = rendered.replace(
+            q_text, 
+                f"<a name=\"quote{n}\"></a><a href=\"#{n}\"><span id=\"quote-highlight-{n}\" style=\"background-color: {color};\">{q_text}</span></a>",
+                1
             )
+    return rendered
+
+def render_data(data, quote_matches=None, color='LightGreen', save_file=False):
+    """
+    This is true to imported data. Possibly some problems with paragraph breaks, but "fix_quotes" is not run on the incoming text!
+    """
+    rendered, metadata = render_basic(data)
+    rendered_w_quotes = render_quotes(rendered, quote_matches, color)
 
     file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
 
     with open(file_name, "w+") as f:
-        f.write(rendered)
+        f.write(rendered_w_quotes)
 
     return metadata
 
+def quotes_from_soup(html):
+    return BeautifulSoup(html).bodytext.find_all("span", attrs={"id":"quote-highlight"})
+
+def audit_rendered_quotes(quotes, rendered_w_quotes):
+    """
+    For testing!
+    """
+    for q, r in zip(quotes, quotes_from_soup(rendered_w_quotes)):
+        q_ = q.content.text.replace("@", "'")
+        r_ = r.text
+        if q_!=r_:
+            return False
+    return True
+
+def audit_parsed_html(file_name, verbose=False):
+    soup = BeautifulSoup(open(file_name))
+    d = sorted([s for s in soup.find_all('span') if s['id'].startswith("quote-data")], key=lambda s: s['id'])
+    h = sorted([s for s in soup.find_all('span') if s['id'].startswith("quote-highlight")], key=lambda s: s['id'])
+    if not len(d) == len(h):
+        warnings.warn(f"n data ({len(d)}) is not the same as n highlights ({len(h)})")
+
+    for n, (d_, h_) in enumerate(zip(d, h)):
+        if d_.text != h_.text:
+            print(n)
+            if verbose:
+                print(d_.text)
+                print(h_.text)
+                print("---")
+    print('done')
+    
+def o(i):
+    os.system(f"open {i}.html")
+
+def pair_quote_matches(quotes, matches):
+    """
+    Aligns quotes with corresponding matches.
+    
+    This creates one index for each quote/match pair for Jinja to parse...
+    instead of having to deal with index changes when quotes have multiple matches.
+    """
+    quote_matches = []
+    for q in quotes:
+        qm = []
+        for m in matches:
+            if m.content == q.content.text:
+                qm.append(m)
+        quote_matches.append((q, qm))
+    return quote_matches
 
 
 
