@@ -12,6 +12,7 @@ from textacy import preprocessing
 import warnings
 from sqlalchemy.engine.base import Engine
 from pandas import DataFrame
+import lxml
 
 def load_articles(engine):
     return engine.execute(
@@ -73,7 +74,7 @@ def extract_soup(data: dict):
 
     TODO: sort out lxml roulette
     """
-    soup = BeautifulSoup(data['Document']['Content'], "lxml")
+    soup = BeautifulSoup(data['Document']['Content'])
     return soup
 
 def biggest_bodytext(soup):
