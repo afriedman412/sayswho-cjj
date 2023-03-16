@@ -6,6 +6,10 @@ from typing import List, Union
 from tqdm import tqdm
 from article_code import get_json_data, full_parse
 
+def compare_ents(e1, e2, min_diff=2):
+    return all([abs(getattr(e1, attr)-getattr(e2,attr)) < min_diff for attr in ['start', 'end']])
+
+
 class quoteAttributor:
     """
     Turns text into attributed quotes.
@@ -16,7 +20,14 @@ class quoteAttributor:
     TODO: Quotation errors still happen, need to account:
     67CN-9C61-F03F-K4G3-00000-00
     """
-    def __init__(self, min_diff: int=5, min_length=0):
+    def __init__(
+            self, 
+            min_diff: int=5, 
+            min_length=0,
+            main_nlp_model="en_coreference_web_trf",
+            ner_nlp_model="./ner_model/output/model-best",
+            textacy_nlp_model="en_core_web_sm"
+            ):
         """
         So you don't have to initiate the spacy model every time.
 
@@ -24,8 +35,9 @@ class quoteAttributor:
             diff (int) - allowed distance between start characters/indexes in self.compare_quote_to_cluster
             min_length (int) - minimum length of span to return (in characters, not tokens) in self.format_cluster and self.format_cluster_span
         """
-        self.nlp = spacy.load("en_coreference_web_trf")
-        self.ner_nlp = spacy.load("en_core_web_sm")
+        self.nlp = spacy.load(main_nlp_model)
+        self.ner_nlp = spacy.load(ner_nlp_model)
+        self.ner_nlp.add_pipe("sentencizer")
         self.min_diff = min_diff
         self.min_length = min_length
         return
@@ -134,6 +146,7 @@ class quoteAttributor:
         Deal with it.
         """
         self.matches = self.quotes_to_clusters()
+        self.get_ent_clusters()
     
     def load_cluster(self, n):
         try:
@@ -201,6 +214,14 @@ class quoteAttributor:
             cluster = None
             span_match = None
         return quote, cluster, span_match
+    
+    def get_ent_clusters(self):
+        self.ent_clusters = []
+        for c,v in self.clusters.items():
+            for c_ in v:
+                for e in self.ner_doc.ents:
+                    if compare_ents(c_, e):
+                        self.ent_clusters.append(c)
     
     # TODO: clean this up, now that there is a Match object
     
@@ -281,12 +302,15 @@ class Match:
         null_attrs = []
 
         if cluster_index:
+            self.cluster_index = cluster_index
+            if cluster_index in qa.ent_clusters:
+                self.ent_cluster_match = "yes"
             self.cluster_full = qa.clusters[cluster_index]
             self.cluster = sorted(list(set([c.text for c in self.cluster_full])), key=lambda c: len(c), reverse=True)
             self.pred_speaker = self.cluster[0]
 
         else:
-            null_attrs += ['cluster', 'pred_speaker']
+            null_attrs += ['cluster', 'pred_speaker', 'cluster_index', 'ent_cluster_match']
 
         if span_match:
             self.span_match = self.cluster_full[span_match]

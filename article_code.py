@@ -8,9 +8,10 @@ import json
 from bs4 import BeautifulSoup
 from collections import Counter
 import regex as re
-from jinja2 import Environment, FileSystemLoader
 from textacy import preprocessing
 import warnings
+from sqlalchemy.engine.base import Engine
+from pandas import DataFrame
 
 def load_articles(engine):
     return engine.execute(
@@ -38,22 +39,28 @@ def full_parse(data, char=" "):
     full_text = clean_article(full_text)
     return full_text
 
-def get_json_data(doc_id: str, engine, path: str="./query_results_2_2_23/" ) -> dict:
+def get_json_data(doc_id: str, source, path: str="./query_results_2_2_23/" ) -> dict:
     """
     Gets the name of the json file that contains the doc_id.
 
     Input:
         doc_id (str) - id for document
-        engine - sqlalchemy engine
+        engine - sqlalchemy engine OR pandas df
         path (str) - path to directory containing query jsons
 
     Output:
         dict containing article data
     """
-    result = engine.execute(
-            f"SELECT `file_name` FROM `articleindex` WHERE `doc_id`='{doc_id}'"
-        ).fetchall()
-    data = json.load(open(os.path.join(path, result[0][0])))
+    if isinstance(source, Engine):
+        result = source.execute(
+                f"SELECT `file_name` FROM `articleindex` WHERE `doc_id`='{doc_id}'"
+            ).fetchall()
+        file_name = result[0][0]
+        
+    elif isinstance(source, DataFrame):
+        file_name = source.query(f"doc_id=='{doc_id}'")['file_name'].values[0]
+
+    data = json.load(open(os.path.join(path, file_name)))
     return next(d for d in data if doc_id in d['ResultId'])
 
 def extract_soup(data: dict):
@@ -173,41 +180,6 @@ def get_metadata(soup):
         'wordcount': soup.wordcount['number']
     }
     return metadata 
-
-def render_basic(data):
-    soup = extract_soup(data)
-    metadata = get_metadata(soup)
-    metadata['bodytext'] = "<p>" + full_parse(data, "</p><p>") 
-    
-    rendered = Environment(
-        loader=FileSystemLoader("./")
-    ).get_template('article_template.html').render(metadata)
-    rendered = preprocessing.normalize.quotation_marks(rendered)
-    return rendered, metadata
-
-def render_quotes(rendered, quote_matches, color="LightGreen"):
-    for n, (quote, matches) in enumerate(quote_matches):
-        q_text = quote.content.text
-        rendered = rendered.replace(
-            q_text, 
-                f"<a name=\"quote{n}\"></a><a href=\"#{n}\"><span id=\"quote-highlight-{n}\" style=\"background-color: {color};\">{q_text}</span></a>",
-                1
-            )
-    return rendered
-
-def render_data(data, quote_matches=None, color='LightGreen', save_file=False):
-    """
-    This is true to imported data. Possibly some problems with paragraph breaks, but "fix_quotes" is not run on the incoming text!
-    """
-    rendered, metadata = render_basic(data)
-    rendered_w_quotes = render_quotes(rendered, quote_matches, color)
-
-    file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
-
-    with open(file_name, "w+") as f:
-        f.write(rendered_w_quotes)
-
-    return metadata
 
 def quotes_from_soup(html):
     return BeautifulSoup(html).bodytext.find_all("span", attrs={"id":"quote-highlight"})
