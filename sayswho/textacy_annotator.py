@@ -50,13 +50,22 @@ class quoteAttributor:
         Ouput:
             self.doc - spacy coref-parsed doc
             self.quotes - list of textacy-extracted quotes
+
+        TODO: do I need two spacy models?
         """
-        self.doc = self.nlp(t)
+        # instantiate spacy doc
+        self.doc = self.nlp(t) 
+
+        # extract coref clusters
         self.clusters = {
             k.split("_")[-1]:v for k,v in self.doc.spans.items() if k.startswith("coref")
-            }
-        t_doc = textacy.make_spacy_doc(t, lang="en_core_web_sm")
-        self.quotes = [q for q in extract.triples.direct_quotations(t_doc)]
+            } 
+        
+        # instantiate textacy spacy doc
+        t_doc = textacy.make_spacy_doc(t, lang="en_core_web_sm") 
+
+        # extract quotations
+        self.quotes = [q for q in extract.triples.direct_quotations(t_doc)] 
         self.parse_entities(t)
 
     def parse_entities(self, t: str):
@@ -149,6 +158,9 @@ class quoteAttributor:
         self.get_ent_clusters()
     
     def load_cluster(self, n):
+        """
+        TODO: can I just do this with .get()?
+        """
         try:
             return self.doc.spans[f"coref_clusters_{n}"]
         except KeyError:
@@ -156,7 +168,7 @@ class quoteAttributor:
     
     def format_cluster_span(self, span):
         """
-        Filters out spans of less than "min_length" and finds the index and label of any entities in the span.
+        Filters out spans of less than self.min_length and finds the index and label of any entities in the span.
 
         Input:
             span - span from a cluster
