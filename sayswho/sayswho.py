@@ -4,7 +4,7 @@ import textacy
 from textacy import extract
 from typing import List, Union
 from tqdm import tqdm
-from article_code import get_json_data, full_parse
+from .article_helpers import get_json_data, full_parse
 
 def compare_ents(e1, e2, min_diff=2):
     return all([abs(getattr(e1, attr)-getattr(e2,attr)) < min_diff for attr in ['start', 'end']])
