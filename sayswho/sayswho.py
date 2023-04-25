@@ -263,19 +263,19 @@ class quoteAttributor:
         f.write(f"full cluster: {cluster if cluster else 'NONE'}\n")
         f.write("-----\n")
 
-    def output_matches(self, ids, file_name, engine):
-        for i in tqdm(ids):
-            data = get_json_data(i, engine)
-            t = full_parse(data)
-            try:
-                self.parse_text(t)
-                self.match_quotes()
-                with open(f"./{file_name}", "a+") as f:
-                    f.write(f'**** {i} ****\n')
-                    for match in self.matches:
-                        self.write_match(match, f)
-            except Exception as e:
-                print(i, e.args)
+    # def output_matches(self, ids, file_name, engine):
+    #     for i in tqdm(ids):
+    #         data = get_json_data(i, engine)
+    #         t = full_parse(data)
+    #         try:
+    #             self.parse_text(t)
+    #             self.match_quotes()
+    #             with open(f"./{file_name}", "a+") as f:
+    #                 f.write(f'**** {i} ****\n')
+    #                 for match in self.matches:
+    #                     self.write_match(match, f)
+    #         except Exception as e:
+    #             print(i, e.args)
 
     def make_match(self, match):
         quote_index, cluster_index, cluster_span = match
