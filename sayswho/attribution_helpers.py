@@ -1,4 +1,5 @@
-from spacy.tokens.span import Span, SpanGroup
+from spacy.tokens.span import Span
+from spacy.tokens import SpanGroup
 from textacy.extract.triples import DQTriple
 from collections import namedtuple
 from typing import Union
