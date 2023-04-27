@@ -1,5 +1,5 @@
 
-from article_code import extract_soup, get_metadata, full_parse
+from .article_helpers import extract_soup, get_metadata, full_parse
 from jinja2 import Environment, FileSystemLoader
 from textacy import preprocessing
 from spacy.tokens import Span

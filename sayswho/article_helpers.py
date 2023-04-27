@@ -40,7 +40,7 @@ def full_parse(data, char=" "):
     full_text = clean_article(full_text)
     return full_text
 
-def get_json_data(doc_id: str, source, path: str="./query_results_2_2_23/" ) -> dict:
+def get_json_data(doc_id: str, source, path: str="./query_results_2_2_23/") -> dict:
     """
     Gets the name of the json file that contains the doc_id.
 
