@@ -1,8 +1,8 @@
 """
 The bulk of the code for quote attribution.
 
-TODO: better seperation of attribution and NER functionality
 TODO: extract canonical speaker for each cluster
+TODO: add displacy / other viz
 """
 
 import spacy
@@ -10,12 +10,9 @@ import spacy_transformers
 import textacy
 from textacy import extract
 from typing import List, Union
-from tqdm import tqdm
-from .article_helpers import get_json_data, full_parse
-
-def compare_ents(e1, e2, min_diff=2):
-    return all([abs(getattr(e1, attr)-getattr(e2,attr)) < min_diff for attr in ['start', 'end']])
-
+from .attribution_helpers import (
+    LilMatch, ClusterEnt, Match, compare_quote_to_cluster, compare_spans
+)
 
 class quoteAttributor:
     """
@@ -32,7 +29,8 @@ class quoteAttributor:
     """
     def __init__(
             self, 
-            min_diff: int=5, 
+            min_speaker_diff: int=5, 
+            min_entity_diff: int=2,
             min_length=0,
             main_nlp_model="en_coreference_web_trf",
             textacy_nlp_model="en_core_web_sm",
@@ -43,7 +41,8 @@ class quoteAttributor:
         So you don't have to initiate the spacy model every time.
 
         Input:
-            diff (int) - allowed distance between start characters/indexes in self.compare_quote_to_cluster
+            min_speaker_diff (int) - allowed distance between start characters/indexes in compare_quote_to_cluster
+            min_entity_diff (int) - allowed distance between start/end of entity and span
             min_length (int) - minimum length of span to return (in characters, not tokens) in self.format_cluster and self.format_cluster_span
         """
         self.nlp = spacy.load(main_nlp_model)
@@ -51,9 +50,24 @@ class quoteAttributor:
             print('setting NER model...')
             self.ner_nlp = spacy.load(ner_nlp_model)
             self.ner_nlp.add_pipe("sentencizer")
-        self.min_diff = min_diff
+        self.min_speaker_diff = min_speaker_diff
+        self.min_entity_diff = min_entity_diff
         self.min_length = min_length
+        self.textacy_nlp_model = textacy_nlp_model # its not used until later
         return
+    
+    def attribute(self, t: str):
+        self.parse_text(t)
+
+        if self.ner:
+            self.extract_entities(t)
+            self.get_ent_clusters()
+        
+        self.quotes_to_clusters()
+
+        return
+    
+    ### DATA INPUT AND PRE-PROCESSING
     
     @property
     def ner(self):
@@ -80,34 +94,34 @@ class quoteAttributor:
         except KeyError:
             return
         
-    def match_clusters(self):
+    def expand_match(self, lil_match: Union[LilMatch, int]):
         """
-        ???
-        """
-        self.matches = self.quotes_to_clusters()
-        if self.ner:
-            self.get_ent_clusters()
-
-    def make_match(self, match: tuple):
-        """
-        Takes a match tuple and converts it to a Match object.
+        Converts a LilMatch into a Match
+        TODO: redo now that there are Match objects -- do I need this function?
 
         Input:
-            match (tuple) - quote/cluster match formatted like tuple(quote_index, cluster_index, cluster_span)
+            match (LilMatch) - a quote/cluster match tuple (quote index, cluster number, index of span in cluster)
+            
+            OR
+
+            match (int) - a match index
 
         Output:
-            new_match (Match) - Match object
+            big_match - a Match object
         """
-        quote_index, cluster_index, cluster_span = match
-        new_match = Match(self, quote_index, cluster_index, cluster_span)
-        if not new_match.cluster:
-            new_match.compare_clusters(self.clusters)
-        return new_match
+        if isinstance(lil_match, int):
+            lil_match = self.matches[lil_match]
+
+        return Match(self, lil_match)
     
+    def expand_matches(self):
+        self.big_matches = [self.expand_match(m) for m in self.matches]
     
     def parse_text(self, t: str):
         """ 
         Imports text, gets clusters, quotes and entities
+
+        TODO: do we need to save doc?
 
         Input: 
             t (string) - formatted text of an article
@@ -123,83 +137,58 @@ class quoteAttributor:
 
         # extract coref clusters
         self.clusters = {
-            k.split("_")[-1]:v for k,v in self.doc.spans.items() if k.startswith("coref")
+            int(k.split("_")[-1]):v for k,v in self.doc.spans.items() if k.startswith("coref")
             } 
         
         # instantiate textacy spacy doc
-        t_doc = textacy.make_spacy_doc(t, lang="en_core_web_sm") 
+        t_doc = textacy.make_spacy_doc(t, lang=self.textacy_nlp_model) 
 
         # extract quotations
         self.quotes = [q for q in extract.triples.direct_quotations(t_doc)] 
+        return
 
-        if self.ner:
-            self.parse_entities(t)
-
-    def parse_entities(self, t: str):
+    def extract_entities(self, t: str):
         """
-        I was having trouble getting the coref model to return entities, so this uses a smaller spacy model to do that.
+        Get any entities in text.
 
         Input:
             t (string) - formatted text of an article
 
         Output:
-            self.ner_doc - spacy-parsed doc
-            self.ent_index (dict) - {entity start: entity label}
+            self.ner_doc
+            self.ents
         """
         self.ner_doc = self.ner_nlp(t)
-        self.ent_index = {e.start:e for e in self.ner_doc.ents}
-        
-    def compare_quote_to_cluster_member(
-            self, 
-            quote: textacy.extract.triples.DQTriple,
-            cluster_member: spacy.tokens.span.Span
-        ): 
-        """
-        Compares the starting character of the quote speaker and the cluster member, as well as the quote speaker sentence and the cluster member sentence to determine equivalence.
-        
-        Input:
-            q (quote triple) - one textacy quote triple
-            cluster_member - one spacy-parsed entity cluster member
-            
-        Output:
-            bool
-        """
-        speaker = quote.speaker[0]
-        if abs(speaker.sent.start_char - cluster_member.sent.start_char) < self.min_diff:
-            if abs(speaker.idx - cluster_member.start_char) < self.min_diff:
-                return True
-        if cluster_member.start_char <= speaker.idx:
-            if cluster_member.end_char >= (speaker.idx + len(speaker)):
-                return True
-        return False
-        
-    def compare_quote_to_cluster(
-            self, 
-            quote: extract.triples.DQTriple, 
-            cluster: spacy.tokens.span_group.SpanGroup
-        ):
-        """
-        Finds first span in cluster that matches (according to self.compare_quote_to_cluster_member) with provided quote.
-        
-        TODO: Doesn't consider further matches. Is this a problem?
-
-        Input:
-            quote - textacy quote object
-            cluster - coref cluster
-
-        Output:
-            n (int) or None - index of cluster member that matches quote (or None, if none match)
-        """
-        try:
-            return next(
-                n for n, cluster_member in enumerate(cluster) if self.compare_quote_to_cluster_member(quote, cluster_member)
-            )
-        except StopIteration:
-            return -1
+        self.ents = self.ner_doc.ents
+        print(len(self.ents))
+        return
     
+    def get_ent_clusters(self):
+        """
+        Create list of cluster/entity matches.
+
+        Input:
+            None
+
+        Output:
+            self.ent_clusters - list(ClusterEnt)
+        """
+        self.ent_clusters = []
+        for cluster_index, cluster in self.clusters.items():
+            for span_index, span in enumerate(cluster):
+                for ent in self.ents:
+                    if compare_spans(span, ent, self.min_entity_diff):
+                        self.ent_clusters.append(
+                            ClusterEnt(cluster_index, span_index, span, ent.start)
+                        )
+        print(len(self.ent_clusters))
+        return
+
     def quotes_to_clusters(self):
         """
         Iterates through quotes found in text, returning matches for each quote.
+
+        TODO: add entity matches here!!
 
         Input:
             None
@@ -209,163 +198,19 @@ class quoteAttributor:
 
             If no match is found, there will be an empty match (n, None None).
         """
-        matches = []
+        self.matches = []
         for quote_index, quote in enumerate(self.quotes):
             matched = False
             for cluster_index, cluster in self.clusters.items():
-                match_index = self.compare_quote_to_cluster(quote, cluster)
+                match_index = compare_quote_to_cluster(quote, cluster, self.min_speaker_diff)
                 if match_index > -1:
-                    # print(f"{quote_index}, {cluster_index}, {match_index} is a match!")
-                    matches.append((quote_index, cluster_index, match_index))
+                    if self.ner:
+                        contains_ent = cluster_index in [e.cluster_index for e in self.ent_clusters]  
+                        self.matches.append(LilMatch(quote_index, cluster_index, match_index, contains_ent))
+                    else:
+                        self.matches.append(LilMatch(quote_index, cluster_index, match_index))
                     matched = True
+            # only returns blank match if no matches are found
             if not matched:
-                matches.append((quote_index, None, None))
-        return matches
-        
-    def format_cluster(self, cluster):
-        """
-        Runs format_cluster_span on all spans, removes duplicates and sorts by reverse length.
-
-        Might be a problem here with removing duplicates early!
-
-        Input:
-            cluster - coref cluster
-
-        Output:
-            list of unique spans and any index/label of entities in the span, in the cluster
-        """
-        unique_spans = list(set([span for span in cluster]))
-        sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
-        return [s for s in sorted_spans if len(s.text) > self.min_length]
-    
-    def parse_match(self, match: Union[tuple, int]):
-        """
-        Converts a match into its data.
-        TODO: redo now that there are Match objects
-
-        Input:
-            match (tuple) - a quote/cluster match tuple (quote index, cluster number, index of span in cluster)
-            
-            OR
-
-            match (int) - a match index
-
-        Output:
-            quote - textacy quote
-            cluster - coref cluster
-        """
-        if isinstance(match, int):
-            match = self.matches[match]
-
-        quote = self.quotes[match[0]]
-        if match[1]:
-            cluster = self.clusters[match[1]]
-            span_match = cluster[match[2]]
-            cluster = [_ for _ in self.format_cluster(cluster) if _]
-        else:
-            cluster = None
-            span_match = None
-        return quote, cluster, span_match
-    
-    def get_ent_clusters(self):
-        self.ent_clusters = []
-        for c,v in self.clusters.items():
-            for c_ in v:
-                for e in self.ner_doc.ents:
-                    if compare_ents(c_, e):
-                        self.ent_clusters.append(c)
-    
-    # TODO: clean this up, now that there is a Match object
-    
-    def prettify_match(self, match: tuple):
-        quote = self.quotes[match[0]]
-        cluster = self.clusters[match[1]] if match[1] else None
-        cluster_member = cluster[match[2]] if cluster else None
-
-        print("quote:", quote.content)
-        print("speaker:", ' '.join([s.text for s in quote.speaker]))
-
-        if cluster_member:
-            print("cluster member:", cluster_member)
-            print("cluster member context:", cluster_member.sent)
-            print("full cluster:", cluster)
-
-    def prettify_matches(self):
-        for m in self.matches:
-            self.prettify_match(m)
-            print("---")
-
-
-class Match:
-    """
-    Automatically loads info for a quoteAttributor quote/cluster match.
-
-    For easier referencing and QC and auditing of actual match.
-
-    TODO: test speaker against all clusters if no cluster
-
-    Input:
-        qa (quoteAttributor) - qa that generated the match
-        quote_index (int) - index of qa quote
-        cluster_index (str) - index of qa cluster
-            (from autogenerated "coref_cluster_N", so its functionally an int, but its used as a string so no need to convert)
-        cluster_member_index (int) - index of cluster member match
-    """
-    def __init__(self, qa: quoteAttributor, quote_index, cluster_index=None, cluster_member_index=None):
-        self.quote = qa.quotes[quote_index]
-        self.content = self.quote.content.text
-        self.quote_char = self.quote.content.start_char
-
-        self.speaker = ' '.join([s.text for s in self.quote.speaker])
-        self.speaker_index = self.quote.speaker[0].idx
-        self.speaker_sent_char = self.quote.speaker[0].sent.start_char
-
-        self.manual_speakers = None
-
-        null_attrs = []
-
-        if cluster_index:
-            self.cluster_index = cluster_index
-            if qa.ner and cluster_index in qa.ent_clusters:
-                self.ent_cluster_match = "yes"
-            else:
-                null_attrs.append("ent_cluster_match")
-            self.cluster = qa.clusters[cluster_index]
-            sorted_cluster = sorted(list(set([c.text for c in self.cluster])), key=lambda c: len(c), reverse=True)
-            self.pred_speaker = sorted_cluster[0]
-
-        else:
-            null_attrs += ['cluster', 'pred_speaker', 'cluster_index', 'ent_cluster_match']
-
-        if cluster_member_index:
-            self.span_match = self.cluster[cluster_member_index]
-            self.span_context = self.span_match.sent.text
-            self.span_match_char = self.span_match.start_char
-            self.span_match_sent_char = self.span_match.sent.start_char
-
-        else:
-            null_attrs += ['span_match', 'span_context', 'span_match_char', 'span_match_sent_char']
-        
-        for a in null_attrs:
-            setattr(self, a, None)
-        
-        return
-    
-    def __repr__(self):
-        return f"content: {self.content}\nspeaker: {self.speaker}"
-    
-    def compare_clusters(self, clusters):
-        """
-        If the match doesn't have a cluster, find any speakers in clusters that match manually.
-
-        The idea here is if the speaker is "Rosenberg" to pull "Detective Jeff Rosenberg" from the clusters.
-
-        quoteAttribution runs this automatically with its clusters if the match doesn't have a cluster!
-        """
-        self.manual_speakers = []
-        for v in clusters.values():
-            speaker_match = [v_ for v_ in v if self.speaker in v_.text.replace("@", "'")]
-            if speaker_match:
-                self.manual_speakers += speaker_match
-
-        self.manual_speakers = list(set(self.manual_speakers))
+                self.matches.append(LilMatch(quote_index))
+        return self.matches
