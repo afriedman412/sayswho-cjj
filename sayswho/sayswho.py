@@ -9,9 +9,10 @@ import spacy
 import spacy_transformers
 import textacy
 from textacy import extract
+from textacy.extract.triples import DQTriple
 from typing import List, Union
 from .attribution_helpers import (
-    LilMatch, ClusterEnt, Match, compare_quote_to_cluster, compare_spans
+    LilMatch, ClusterEnt, Match, compare_quote_to_cluster, compare_spans, text_contains
 )
 
 class quoteAttributor:
@@ -47,7 +48,6 @@ class quoteAttributor:
         """
         self.nlp = spacy.load(main_nlp_model)
         if ner_nlp_model:
-            print('setting NER model...')
             self.ner_nlp = spacy.load(ner_nlp_model)
             self.ner_nlp.add_pipe("sentencizer")
         self.min_speaker_diff = min_speaker_diff
@@ -66,8 +66,6 @@ class quoteAttributor:
         self.quotes_to_clusters()
 
         return
-    
-    ### DATA INPUT AND PRE-PROCESSING
     
     @property
     def ner(self):
@@ -160,7 +158,6 @@ class quoteAttributor:
         """
         self.ner_doc = self.ner_nlp(t)
         self.ents = self.ner_doc.ents
-        print(len(self.ents))
         return
     
     def get_ent_clusters(self):
@@ -181,14 +178,33 @@ class quoteAttributor:
                         self.ent_clusters.append(
                             ClusterEnt(cluster_index, span_index, span, ent.start)
                         )
-        print(len(self.ent_clusters))
         return
+    
+    def quote_to_ents(
+            self, 
+            quote: DQTriple, 
+            cluster_index: Union[int, None]=None
+            ) -> bool:
+        """
+        Input:
+            quote - the quote
+            cluster_index (optional int) - cluster index
+
+        Output:
+            bool - whether quote speaker is or is within an entity, or whether the quote cluster contains an entity
+        """
+        if any([text_contains(quote.speaker[0], ent) for ent in self.ents]):
+            return True
+        if cluster_index and (cluster_index in [e.cluster_index for e in self.ent_clusters]):
+            return True
+        else:
+            return False
 
     def quotes_to_clusters(self):
         """
         Iterates through quotes found in text, returning matches for each quote.
 
-        TODO: add entity matches here!!
+        Also evalutes each quote/cluster_index match for entity matches.
 
         Input:
             None
@@ -199,18 +215,33 @@ class quoteAttributor:
             If no match is found, there will be an empty match (n, None None).
         """
         self.matches = []
-        for quote_index, quote in enumerate(self.quotes):
+        for quote_index, quote in enumerate(self.quotes): # for each quote...
             matched = False
-            for cluster_index, cluster in self.clusters.items():
+            for cluster_index, cluster in self.clusters.items(): # for each cluster...
                 match_index = compare_quote_to_cluster(quote, cluster, self.min_speaker_diff)
-                if match_index > -1:
-                    if self.ner:
-                        contains_ent = cluster_index in [e.cluster_index for e in self.ent_clusters]  
-                        self.matches.append(LilMatch(quote_index, cluster_index, match_index, contains_ent))
-                    else:
-                        self.matches.append(LilMatch(quote_index, cluster_index, match_index))
+                if match_index > -1: # if the speaker matches any of the spans in the cluster ...
+                    # if self.ner: # check if the cluster contains an entity ...
+                    #     contains_ent = self.quote_to_ents(quote, cluster_index)
+                    # append
+                    self.matches.append(
+                        LilMatch(
+                        quote_index, 
+                        cluster_index, 
+                        match_index, 
+                        self.quote_to_ents(quote, cluster_index)
+                        ))
                     matched = True
-            # only returns blank match if no matches are found
+
+            # if not matched yet ...
             if not matched:
-                self.matches.append(LilMatch(quote_index))
+                # if self.ner and self.quote_to_ents(quote): # check for speaker/entity matches...
+                #     self.matches.append(LilMatch(quote_index, None, None, True))
+                # else: # or return a blank match
+                self.matches.append(
+                    LilMatch(
+                    quote_index, 
+                    None, 
+                    None,
+                    self.quote_to_ents(quote))
+                    )
         return self.matches

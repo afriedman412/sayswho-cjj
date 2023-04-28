@@ -10,8 +10,7 @@ from collections import Counter
 import regex as re
 from textacy import preprocessing
 import warnings
-# from sqlalchemy.engine.base import Engine
-# from pandas import DataFrame
+from collections import namedtuple
 import lxml
 
 def load_articles(engine):

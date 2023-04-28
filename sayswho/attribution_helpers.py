@@ -1,4 +1,5 @@
 from spacy.tokens.span import Span
+from spacy.tokens.token import Token
 from spacy.tokens import SpanGroup
 from textacy.extract.triples import DQTriple
 from collections import namedtuple
@@ -10,9 +11,14 @@ LilMatch: tuple[int, Union[int, None], Union[int, None], bool] = namedtuple(
     defaults=(0, None, None, False)
 )
 
-ClusterEnt: tuple[int, int,Span, int] = namedtuple(
+ClusterEnt: tuple[int, int, Span, int] = namedtuple(
     "ClusterEnt",
     ["cluster_index", "span_index", "span", "ent_start"]
+)
+
+Boundaries: tuple[int, int] = namedtuple(
+    "boundaries",
+    ['start', 'end']
 )
 
 class Match:
@@ -88,6 +94,27 @@ class Match:
 
         self.manual_speakers = list(set(self.manual_speakers))
 
+def get_boundaries(t: Union[Token, Span]) -> Boundaries:
+    """
+    Convenience function that returns a Boundaries tuple with the start and the end character of t.
+
+    Necessary because Token and Span have differently named attributes.
+
+    Input:
+        t (Token or Span) - spacy token or span object
+
+    Output:
+        Boundares(start, end) with start character and end character of t.
+    """
+    if isinstance(t, Token):
+        return Boundaries(t.idx, t.idx+len(t))
+    
+    if isinstance(t, Span):
+        return Boundaries(t.start_char, t.end_char)
+    
+    else:
+        raise TypeError("input needs to be Token or Span!")
+
 def compare_spans(
             s1: Span, 
             s2: Span,
@@ -96,9 +123,11 @@ def compare_spans(
         """
         Compares two spans to see if their starts and ends are less than self.min_entity_diff.
 
+        If compare
+
         Input:
             s1 and s2 - spacy spans
-
+            min_entity_diff (int) - threshold for difference in start and ends
         Output:
             bool - whether the two spans start and end close enough to each other to be "equivalent"
 
@@ -106,6 +135,32 @@ def compare_spans(
         return all([
                 abs(getattr(s1, attr)-getattr(s2,attr)) < min_entity_diff for attr in ['start', 'end']
             ])
+
+def text_contains(
+        t1: Union[Span, Token],
+        t2: Union[Span, Token]
+) -> bool:
+    """
+    Does t1 contain t2 or v/v? Assumes both are from the same doc!!
+
+    Uses get_boundaries beacuse quote speakers are tokens but entities are spans.
+
+    TODO: verify same doc
+
+    Input:
+        t1 and t2 - spacy spans or tokens (from the same doc)
+
+    Output:
+        bool - whether either t1 contains the other t2
+
+    """
+    b1, b2 = tuple([get_boundaries(t) for t in [t1, t2]])
+
+    if (b1.start <= b2.start and b1.end >= b2.end) or (b2.start <= b1.start and b2.end >= b1.end):
+        return True
+    
+    else:
+        return False
 
 def format_cluster(cluster, min_length: int):
     """
