@@ -22,11 +22,6 @@ class quoteAttributor:
     Assumes text is pre-processed. (This is downstream of any soup processing!)
 
     TODO: Raise error (or warning?) if multiple clusters match.
-    TODO: Quotation errors still happen, need to account:
-    67CN-9C61-F03F-K4G3-00000-00
-    672R-9X81-DY8S-B2WD-00000-00
-    5W66-KYX1-DYNS-32VT-00000-00
-
     """
     def __init__(
             self, 
@@ -53,14 +48,27 @@ class quoteAttributor:
         self.min_speaker_diff = min_speaker_diff
         self.min_entity_diff = min_entity_diff
         self.min_length = min_length
-        self.textacy_nlp_model = textacy_nlp_model # its not used until later
+        self.textacy_nlp_model = textacy_nlp_model # not used until later
         return
     
-    def attribute(self, t: str):
+    def attribute(self, t: str, apostrophe_mask="@", linebreak_mask=None):
+        """
+        Loads input text into spacy, gets entities (if NER is provided), gets quotes with textacy, attributes quotes to clusters.
+
+        Input:
+            t (str) - the text to be attributed
+            apostrophe_mask (str) - used to mask apostrophes so they aren't seen as de facto quotation marks when locating quotes.
+            linebreak_mask (str) - used to indicate linebreaks to prevent quote attribution across paragraphs.
+                ie: '"I wasn't even there." (line break) Police said his alibi held up.' -- quote gets attributed to "Police". Masking the line breaks fixes this (maybe?)
+        """
         self.parse_text(t)
+        self.apostrophe_mask = apostrophe_mask
+        self.linebreak_mask = linebreak_mask
 
         if self.ner:
-            self.extract_entities(t)
+            # this was self.extract_entities, but easier to just do here
+            self.ner_doc = self.ner_nlp(t)
+            self.ents = self.ner_doc.ents
             self.get_ent_clusters()
         
         self.quotes_to_clusters()
@@ -76,6 +84,14 @@ class quoteAttributor:
             bool
         """
         return 'ner_nlp' in self.__dict__
+    
+    def clusto(self):
+        """
+        Shows clusters with duplicates removed and apostrophe masks replaced.)
+        """
+        if 'clusters' in self.__dict__:
+            for k,v in self.clusters.items():
+                print(str(k) + ":", ' | '.join(set([t.text.lower().replace(self.apostrophe_mask, "'") for t in v])))
     
     def get_cluster(self, cluster_index: Union[int, str]):
         """
@@ -144,21 +160,6 @@ class quoteAttributor:
         # extract quotations
         self.quotes = [q for q in extract.triples.direct_quotations(t_doc)] 
         return
-
-    def extract_entities(self, t: str):
-        """
-        Get any entities in text.
-
-        Input:
-            t (string) - formatted text of an article
-
-        Output:
-            self.ner_doc
-            self.ents
-        """
-        self.ner_doc = self.ner_nlp(t)
-        self.ents = self.ner_doc.ents
-        return
     
     def get_ent_clusters(self):
         """
@@ -184,7 +185,7 @@ class quoteAttributor:
             self, 
             quote: DQTriple, 
             cluster_index: Union[int, None]=None
-            ) -> bool:
+            ) -> tuple[bool, str]:
         """
         Input:
             quote - the quote
@@ -194,11 +195,11 @@ class quoteAttributor:
             bool - whether quote speaker is or is within an entity, or whether the quote cluster contains an entity
         """
         if any([text_contains(quote.speaker[0], ent) for ent in self.ents]):
-            return True
-        if cluster_index and (cluster_index in [e.cluster_index for e in self.ent_clusters]):
-            return True
+            return True, "contain"
+        elif cluster_index and cluster_index in [e.cluster_index for e in self.ent_clusters]:
+            return True, "cluster"
         else:
-            return False
+            return False, "none"
 
     def quotes_to_clusters(self):
         """
@@ -220,28 +221,33 @@ class quoteAttributor:
             for cluster_index, cluster in self.clusters.items(): # for each cluster...
                 match_index = compare_quote_to_cluster(quote, cluster, self.min_speaker_diff)
                 if match_index > -1: # if the speaker matches any of the spans in the cluster ...
-                    # if self.ner: # check if the cluster contains an entity ...
-                    #     contains_ent = self.quote_to_ents(quote, cluster_index)
-                    # append
-                    self.matches.append(
-                        LilMatch(
-                        quote_index, 
-                        cluster_index, 
-                        match_index, 
-                        self.quote_to_ents(quote, cluster_index)
-                        ))
+                    if self.ner:
+                        contains_ent, ent_method = self.quote_to_ents(quote, cluster_index)
+                        self.matches.append(
+                            LilMatch(
+                            quote_index, 
+                            cluster_index, 
+                            match_index, 
+                            contains_ent,
+                            ent_method
+                            ))
+                    else:
+                        self.matches.append(
+                            LilMatch(
+                            quote_index, 
+                            cluster_index, 
+                            match_index
+                            ))
                     matched = True
 
             # if not matched yet ...
             if not matched:
-                # if self.ner and self.quote_to_ents(quote): # check for speaker/entity matches...
-                #     self.matches.append(LilMatch(quote_index, None, None, True))
-                # else: # or return a blank match
                 self.matches.append(
                     LilMatch(
                     quote_index, 
                     None, 
                     None,
-                    self.quote_to_ents(quote))
-                    )
+                    False,
+                    'none'
+                    ))
         return self.matches
