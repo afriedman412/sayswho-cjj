@@ -7,9 +7,7 @@ TODO: add displacy / other viz
 
 import spacy
 import spacy_transformers
-import textacy
-from textacy import extract
-from textacy.extract.triples import DQTriple
+from .textacy_bootleg import DQTriple, direct_quotations
 from typing import List, Union
 from .attribution_helpers import (
     LilMatch, ClusterEnt, Match, compare_quote_to_cluster, compare_spans, text_contains
@@ -31,7 +29,6 @@ class quoteAttributor:
             main_nlp_model="en_coreference_web_trf",
             textacy_nlp_model="en_core_web_sm",
             ner_nlp_model=None
-            
             ):
         """
         So you don't have to initiate the spacy model every time.
@@ -42,6 +39,7 @@ class quoteAttributor:
             min_length (int) - minimum length of span to return (in characters, not tokens) in self.format_cluster and self.format_cluster_span
         """
         self.nlp = spacy.load(main_nlp_model)
+        self.t_nlp = spacy.load(textacy_nlp_model)
         if ner_nlp_model:
             self.ner_nlp = spacy.load(ner_nlp_model)
             self.ner_nlp.add_pipe("sentencizer")
@@ -51,7 +49,13 @@ class quoteAttributor:
         self.textacy_nlp_model = textacy_nlp_model # not used until later
         return
     
-    def attribute(self, t: str, apostrophe_mask="@", linebreak_mask=None):
+    def attribute(
+            self, 
+            t: str, 
+            apostrophe_mask="@", 
+            linebreak_mask=None,
+            expand_matches=True
+            ):
         """
         Loads input text into spacy, gets entities (if NER is provided), gets quotes with textacy, attributes quotes to clusters.
 
@@ -73,6 +77,8 @@ class quoteAttributor:
         
         self.quotes_to_clusters()
 
+        if expand_matches:
+            self.expand_matches()
         return
     
     @property
@@ -92,6 +98,10 @@ class quoteAttributor:
         if 'clusters' in self.__dict__:
             for k,v in self.clusters.items():
                 print(str(k) + ":", ' | '.join(set([t.text.lower().replace(self.apostrophe_mask, "'") for t in v])))
+
+    def show_big_matches(self):
+        for m in self.big_matches:
+            print(m, '\n', m.cluster_index, '\n')
     
     def get_cluster(self, cluster_index: Union[int, str]):
         """
@@ -155,10 +165,10 @@ class quoteAttributor:
             } 
         
         # instantiate textacy spacy doc
-        t_doc = textacy.make_spacy_doc(t, lang=self.textacy_nlp_model) 
+        t_doc = self.t_nlp(t) 
 
         # extract quotations
-        self.quotes = [q for q in extract.triples.direct_quotations(t_doc)] 
+        self.quotes = [q for q in direct_quotations(t_doc)] 
         return
     
     def get_ent_clusters(self):

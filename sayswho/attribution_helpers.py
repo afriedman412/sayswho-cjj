@@ -79,7 +79,7 @@ class Match:
     
     def __repr__(self):
         return '\n'.join([f"{k}: {self.__dict__.get(k)}" for k in [
-            "content", "speaker", "pred_speaker", "manual_speakers", "contains_ent", "ent_method"
+            "content", "speaker", "pred_speaker", "manual_speakers_", "contains_ent", "ent_method"
         ]])
     
     def compare_clusters(self, clusters):
@@ -98,7 +98,7 @@ class Match:
             if speaker_match:
                 self.manual_speakers += speaker_match
 
-        self.manual_speakers = list(set(self.manual_speakers))
+        self.manual_speakers_ = list(set([m.text for m in self.manual_speakers]))
 
 def get_boundaries(t: Union[Token, Span]) -> Boundaries:
     """

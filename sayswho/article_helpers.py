@@ -11,23 +11,40 @@ import regex as re
 from textacy import preprocessing
 import warnings
 from collections import namedtuple
-import lxml
+from pandas import DataFrame
 
-def load_articles(engine):
-    return engine.execute(
-            f"SELECT `doc_id` FROM `articleindex`"
-        ).fetchall()
+def load_doc(doc_id: str, df: DataFrame) -> dict:
+    """
+    Loads the document of doc_id
 
-def full_parse(data, char=" "):
+    Input:
+        doc_id (str) - lexis document ID in the format (\S{4}-)-0{4}-00
+        df (DataFrame) - filtered dataframe of doc_id the json file (file_name) that contains the document
+
+    Output:
+        data (dict) - lexis document query result
+    """
+    path = "../CJJ/query_work_files/query_results_2_2_23/"
+    file_name = df.query("doc_id==@doc_id")['file_name'].iloc[0]
+
+    data = json.load(open(os.path.join(path, file_name)))
+    data = next(d for d in data if doc_id in d['ResultId'])
+    return data
+
+def full_parse(data: dict, char: str=" ") -> str:
     """
     TODO: biggest bodytext or both bodytext?
 
-    Splits bodytext into paragraphs (by <p> tags) and runs "fix_quote" on paragraph text.
+    - extracts soup from articledata
+    - finds biggest bodytext tag in soup
+    - makes list of all paragraph text in bodytext, formatting each text with fix_quote
+    - joins paragraphs with char and returns
 
     Input: 
-        bodytext (soup.bodytext object)
+        data (dict) - data of article as extracted from json archive file
+        char (str) - character to connect text from all article paragraphs
     Output: 
-        texts (list of text)
+        full_text - article text, joined by char
     """
     texts = []
     soup = extract_soup(data)
@@ -39,30 +56,6 @@ def full_parse(data, char=" "):
     full_text = clean_article(full_text)
     return full_text
 
-def get_json_data(doc_id: str, source, path: str="./query_results_2_2_23/") -> dict:
-    """
-    Gets the name of the json file that contains the doc_id.
-
-    Input:
-        doc_id (str) - id for document
-        engine - sqlalchemy engine OR pandas df
-        path (str) - path to directory containing query jsons
-
-    Output:
-        dict containing article data
-    """
-    if isinstance(source, Engine):
-        result = source.execute(
-                f"SELECT `file_name` FROM `articleindex` WHERE `doc_id`='{doc_id}'"
-            ).fetchall()
-        file_name = result[0][0]
-        
-    elif isinstance(source, DataFrame):
-        file_name = source.query(f"doc_id=='{doc_id}'")['file_name'].values[0]
-
-    data = json.load(open(os.path.join(path, file_name)))
-    return next(d for d in data if doc_id in d['ResultId'])
-
 def extract_soup(data: dict):
     """
     Input:
@@ -73,7 +66,7 @@ def extract_soup(data: dict):
 
     TODO: sort out lxml roulette
     """
-    soup = BeautifulSoup(data['Document']['Content'])
+    soup = BeautifulSoup(data['Document']['Content'], features="lxml")
     return soup
 
 def biggest_bodytext(soup):
@@ -88,21 +81,29 @@ def biggest_bodytext(soup):
     """
     return sorted(soup.find_all("bodytext"), key= lambda t: len(t.text), reverse=True)[0]
 
-def fix_quotes(t, mask="@"):
+def fix_quotes(t: str, mask: str="@") -> str:
     """
     Adjusts quotation marks that are problematic for textacy.
+    - standardize fancy quotes
+    - add spaces pre- and post- quotation mark
+    - replace hanging s-plurals
+    - close quotation marks to paragraph breaks within quotes
+    - edit out internal quotes
+
+    TODO: try removing this, as most of this shouldn't matter anymore with improved quote parser
 
     Masks single quotes with "@", to be replaced after quote parsing.
 
     Input:
         t (str) - article text
+        mask (str) - string to replace apostrophes with to hide from quote parser 
 
     Output:
         t (str) - article text with fixed quotations
 
     TODO: revert internal quotes?
     """
-    # replace fancy quotes
+    # # replace fancy quotes -- this shouldn't matter with fixed quotation mark arser
     t = preprocessing.normalize.quotation_marks(t)
 
     # add space pre- or post- quotation mark if missing (because quote parser relies on the quote/space construction)
@@ -116,7 +117,7 @@ def fix_quotes(t, mask="@"):
     if Counter(t)['"'] % 2:
         t += '\"'
 
-    # handle single qutoation marks
+    # handle single quotation marks
     # edit out internal quotes
     for r in re.finditer(r"\s\'(.+?)\'([\s\"])", t):
         t = t.replace(r[0], " " + r[1] + r[2])
@@ -127,43 +128,50 @@ def fix_quotes(t, mask="@"):
 
     return t
 
-def fix_bad_quote_spaces(text, char='"'):
+def fix_bad_quote_spaces(t: str, char: str='"') -> str:
     """
-    Inserts a space before or after a quotation mark if it does not have one. Textacy quote parsing assumes quotations are \s\".+\"\s, so missing spaces will mess up parsing.
+    Inserts a space before or after a quotation mark if it does not have one. 
+    Textacy quote parsing assumes quotations are \s\".+\"\s, so missing spaces will mess up parsing.
 
     Counts number of quotation marks to determine whether to put the space before or after.
 
     (Actually works for any character, but default is quotation mark.)
 
     Input:
-        text (str) - text to be cleaned
+        t (str) - text to be cleaned
         char (str) - character to insert space before or after (default is quotation mark)
+
+    Output:
+        t (str) - cleaned article text
     """
     test_reg = r"(?<=\S)" + char + r"(?=\S)"
     
     # this needs to be iterative because indexes change
-    while re.search(test_reg, text):
+    while re.search(test_reg, t):
         # get char indexes
-        char_indexes = [n for n,i in enumerate(text) if i==char]    
+        char_indexes = [n for n,i in enumerate(t) if i==char]    
 
-        bad_char = re.search(test_reg, text)
+        bad_char = re.search(test_reg, t)
         replacer = '" ' if char_indexes.index(bad_char.start()) % 2 else ' "'
 
-        text = text[:bad_char.start()] + replacer + text[bad_char.end():]
+        t = t[:bad_char.start()] + replacer + t[bad_char.end():]
     
-    return text
+    return t
 
-def clean_article(t):
+def clean_article(t :str) -> str:
     """
     TODO: Amend with more text to remove
 
     Input:
         t (str) - article text
+
+    Output:
+        t (str) - article with selectd text removed
     """
     t = re.split(r"___ \(c\)20\d{2}", t)[0]
     return t
 
-def get_metadata(soup):
+def get_metadata(soup: BeautifulSoup) -> dict:
     """
     Input:
         soup (soup) - soup for article

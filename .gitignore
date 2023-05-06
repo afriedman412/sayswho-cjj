@@ -1,5 +1,15 @@
-./sayswho/article_helpers.py
-./sayswho/rendering_helpers.py
+# ./sayswho/article_helpers.py
+# ./sayswho/rendering_helpers.py
+
+testo.py
+dispo.py
+cluster_count*
+*.pkl
+output/
+parse_text.txt
+*.**v
+*.zip
+temp.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
