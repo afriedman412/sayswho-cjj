@@ -1,112 +1,12 @@
 import collections
 from spacy.tokens import Doc, Span, Token
 from typing import Iterable
-from spacy.symbols import (
-    AUX,
-    VERB,
-    PUNCT,
-    agent,
-    attr,
-    aux,
-    auxpass,
-    csubj,
-    dobj,
-    neg,
-    nsubj,
-)
+from .constants import _reporting_verbs, _VERB_MODIFIER_DEPS
+from spacy.symbols import VERB, PUNCT
 
 DQTriple: tuple[list[Token], list[Token], Span] = collections.namedtuple(
     "DQTriple", ["speaker", "cue", "content"]
 )
-
-_ACTIVE_SUBJ_DEPS = {csubj, nsubj, dobj}
-_VERB_MODIFIER_DEPS = {aux, auxpass, neg}
-
-_reporting_verbs = {
-        "according",
-        "accuse",
-        "acknowledge",
-        "add",
-        "admit",
-        "agree",
-        "allege",
-        "announce",
-        "argue",
-        "ask",
-        "assert",
-        "believe",
-        "blame",
-        "charge",
-        "cite",
-        "claim",
-        "complain",
-        "concede",
-        "conclude",
-        "confirm",
-        "contend",
-        "continue",
-        "criticize",
-        "declare",
-        "decline",
-        "deny",
-        "describe",
-        "disagree",
-        "disclose",
-        "estimate",
-        "explain",
-        "fear",
-        "hope",
-        "insist",
-        "maintain",
-        "mention",
-        "note",
-        "observe",
-        "order",
-        "post",
-        "predict",
-        "promise",
-        "read",
-        "recall",
-        "recommend",
-        "reply",
-        "report",
-        "say",
-        "scream",
-        "state",
-        "stress",
-        "suggest",
-        "tell",
-        "testify",
-        "think",
-        "tweet",
-        "urge",
-        "warn",
-        "worry",
-        "write",
-    }
-
-"""
-Ordinal points of the token.is_quote characters, matched up by start and end.
-
-source:
-switch = "\"\'"
-start = "“‘```“‘«‹「『„‚"
-end = "”’’’’”’»›」』”’"
-
-"""
-QUOTATION_MARK_PAIRS = {
-    (34, 34),
-    (39, 39),
-    (96, 8217),
-    (171, 187),
-    (8216, 8217),
-    (8218, 8217),
-    (8220, 8221),
-    (8222, 8221),
-    (8249, 8250),
-    (12300, 12301),
-    (12302, 12303)
-    }
 
 def filter_cue_candidates(tok):
     return all([
@@ -139,7 +39,6 @@ def expand_noun(tok: Token) -> list[Token]:
         if child.dep_ == "compound"
     ]
     return tok_and_conjuncts + compounds
-
 
 def expand_verb(tok: Token) -> list[Token]:
     """Expand a verb token to include all associated auxiliary and negation tokens."""

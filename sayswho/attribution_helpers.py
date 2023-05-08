@@ -1,7 +1,7 @@
 from spacy.tokens.span import Span
 from spacy.tokens.token import Token
 from spacy.tokens import SpanGroup
-from textacy.extract.triples import DQTriple
+from .textacy_boot_helpers import DQTriple
 from collections import namedtuple
 from typing import Union
 

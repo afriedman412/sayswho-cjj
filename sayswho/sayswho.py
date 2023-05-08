@@ -121,8 +121,6 @@ class quoteAttributor:
     def expand_match(self, lil_match: Union[LilMatch, int]):
         """
         Converts a LilMatch into a Match
-        TODO: redo now that there are Match objects -- do I need this function?
-
         Input:
             match (LilMatch) - a quote/cluster match tuple (quote index, cluster number, index of span in cluster)
             

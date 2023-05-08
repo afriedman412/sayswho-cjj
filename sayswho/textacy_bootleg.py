@@ -6,13 +6,10 @@ Moved it here because it was easier than worrying about loading the right versio
 from operator import attrgetter
 from typing import Iterable
 from spacy.tokens import Doc, Span, Token
+from .constants import QUOTATION_MARK_PAIRS, _ACTIVE_SUBJ_DEPS
 from .textacy_boot_helpers import (
-    DQTriple, QUOTATION_MARK_PAIRS, _ACTIVE_SUBJ_DEPS,
-    expand_noun, expand_verb, windower, filter_cue_candidates, filter_speaker_candidates
+    DQTriple, expand_noun, expand_verb, windower, filter_cue_candidates, filter_speaker_candidates
 )
-from spacy.symbols import VERB, PUNCT
-
-
 
 def direct_quotations(doc: Doc) -> Iterable[DQTriple]:
     """

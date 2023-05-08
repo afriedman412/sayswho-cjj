@@ -8,12 +8,12 @@ import json
 from bs4 import BeautifulSoup
 from collections import Counter
 import regex as re
-from textacy import preprocessing
+# from textacy import preprocessing
 import warnings
 from collections import namedtuple
-from pandas import DataFrame
+from .constants import json_path, file_key
 
-def load_doc(doc_id: str, df: DataFrame) -> dict:
+def load_doc(doc_id: str) -> dict:
     """
     Loads the document of doc_id
 
@@ -24,10 +24,9 @@ def load_doc(doc_id: str, df: DataFrame) -> dict:
     Output:
         data (dict) - lexis document query result
     """
-    path = "../CJJ/query_work_files/query_results_2_2_23/"
-    file_name = df.query("doc_id==@doc_id")['file_name'].iloc[0]
+    file_name = next(k['file_name'] for k in file_key if k['doc_id']==doc_id)
 
-    data = json.load(open(os.path.join(path, file_name)))
+    data = json.load(open(os.path.join(json_path, file_name)))
     data = next(d for d in data if doc_id in d['ResultId'])
     return data
 
@@ -50,10 +49,9 @@ def full_parse(data: dict, char: str=" ") -> str:
     soup = extract_soup(data)
     bodytext = biggest_bodytext(soup)
     for p in bodytext.find_all("p"):
-        texts.append(fix_quotes(p.text))
+        texts.append(fix_quotes(p.text.strip(), False))
 
     full_text = char.join(texts)
-    full_text = clean_article(full_text)
     return full_text
 
 def extract_soup(data: dict):
@@ -104,7 +102,7 @@ def fix_quotes(t: str, mask: str="@") -> str:
     TODO: revert internal quotes?
     """
     # # replace fancy quotes -- this shouldn't matter with fixed quotation mark arser
-    t = preprocessing.normalize.quotation_marks(t)
+    # t = preprocessing.normalize.quotation_marks(t)
 
     # add space pre- or post- quotation mark if missing (because quote parser relies on the quote/space construction)
     t = fix_bad_quote_spaces(t)
@@ -119,8 +117,8 @@ def fix_quotes(t: str, mask: str="@") -> str:
 
     # handle single quotation marks
     # edit out internal quotes
-    for r in re.finditer(r"\s\'(.+?)\'([\s\"])", t):
-        t = t.replace(r[0], " " + r[1] + r[2])
+    # for r in re.finditer(r"\s\'(.+?)\'([\s\"])", t):
+    #     t = t.replace(r[0], " " + r[1] + r[2])
     
     # mark all remaining single quotation marks
     if mask:
@@ -225,6 +223,7 @@ def o(i):
 def pair_quote_matches(quotes, matches):
     """
     Aligns quotes with corresponding matches.
+    TODO: move to rendering helpers?
     
     This creates one index for each quote/match pair for Jinja to parse...
     instead of having to deal with index changes when quotes have multiple matches.
