@@ -78,7 +78,7 @@ class CRFE:
         """
         self.ent_chains = []
         for e in self.ents:
-            chain = self.chain_from_ent(e)
+            chain = self.chain_from_span(e)
             if chain:
                 if chain not in self.ent_chains:
                     self.ent_chains.append(chain[0])
