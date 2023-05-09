@@ -25,6 +25,10 @@ class CRFE:
         if self.ner:
             return self.ner_doc.ents
         
+    @property
+    def chains(self):
+        self.doc._.coref_chains.print()
+        
     def attribute(self, t):
         self.doc = self.nlp(t)
         self.quotes = [q for q in direct_quotations(self.doc)]
@@ -44,9 +48,9 @@ class CRFE:
         except StopIteration:
             return
         
-    def chain_from_ent(self, ent: Span):
+    def chain_from_span(self, span: Span):
         return [
-            chain_n for t in ent 
+            chain_n for t in span 
             if (chain_n:= self.chain_from_token(t)) is not None
         ]
     
@@ -96,3 +100,5 @@ class CRFE:
                 if e.start <= s.i <= e.end:
                     return True
         return False
+
+    
