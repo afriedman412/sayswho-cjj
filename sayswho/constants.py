@@ -1,7 +1,6 @@
 from spacy.symbols import (aux, auxpass, csubj, dobj, neg, nsubj)
 import json
 import os
-print(os.getcwd())
 
 # TODO: adjust this for remote functionality
 json_path = "../CJJ/query_work_files/query_results_2_2_23/"
@@ -109,4 +108,5 @@ _reporting_verbs = {
         "worry",
         "write",
     }
+
 
