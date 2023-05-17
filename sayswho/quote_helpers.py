@@ -48,6 +48,9 @@ def expand_verb(tok: Token) -> list[Token]:
     return [tok] + verb_modifiers
 
 def line_break_window(i, j, doc):
+    """
+    Finds the boundaries of the paragraph containing doc[i:j].
+    """
     for i_, j_ in list(zip(
         [tok.i for tok in doc if tok.text=="\n"],
         [tok.i for tok in doc if tok.text=="\n"][1:])
@@ -58,6 +61,9 @@ def line_break_window(i, j, doc):
         return (None, None)
     
 def windower(i, j, doc, para=False) -> Iterable:
+    """
+    Two ways to search for cue and speaker: the old way, and a new way based on line breaks.
+    """
     if para:
         i_, j_ = line_break_window(i, j, doc)
         if i_:

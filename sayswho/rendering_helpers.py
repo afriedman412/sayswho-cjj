@@ -1,13 +1,12 @@
 
 from .article_helpers import extract_soup, get_metadata, full_parse
-from .sayswho import quoteAttributor
+from .sayswho import Attributor
 from jinja2 import Environment, FileSystemLoader
-from textacy.preprocessing import normalize
 from spacy.tokens import Doc, Span, Token
 from typing import Iterable
 import os
 
-def render_qa(qa: quoteAttributor):
+def render_qa(qa: Attributor):
     ents = consolidate_ents(qa)
     return highlight_ents(qa.ner_doc, ents)
 
@@ -42,7 +41,7 @@ def highlight_ents(
 
     return ' '.join(output_text)
 
-def consolidate_ents(qa: quoteAttributor) -> Iterable[Span]:
+def consolidate_ents(qa: Attributor) -> Iterable[Span]:
     """
     Combines and orders quotes and LE ents for HTML parsing.
 
@@ -97,7 +96,7 @@ def render_basic(data: dict) -> Iterable:
     rendered = Environment(
         loader=FileSystemLoader("./")
     ).get_template('article_template.html').render(metadata)
-    rendered = normalize.quotation_marks(rendered)
+    # rendered = normalize.quotation_marks(rendered)
     return rendered, metadata
 
 def render_quotes(rendered, quotes, color="LightGreen"):

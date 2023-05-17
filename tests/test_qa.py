@@ -1,13 +1,9 @@
 import pytest
-from sayswho.sayswho import quoteAttributor
-
-# @pytest.fixture(scope="module")
-# def qa():
-#     return quoteAttributor()
+from sayswho.sayswho import spacyAttributor
 
 @pytest.fixture(scope="module")
 def qa_ner():
-    return quoteAttributor(ner_nlp_model="./output/model-last/")
+    return spacyAttributor(ner_nlp="./output/model-last/")
 
 @pytest.mark.parametrize(
     "text, ents",
@@ -36,4 +32,5 @@ Police also said a kid mug shot is kept only if the suspect is classified a juve
 
 def test_ents(text, ents, qa_ner):
     qa_ner.attribute(text)
+    assert qa_ner.ner
     assert [e.text for e in qa_ner.ents] == ents
