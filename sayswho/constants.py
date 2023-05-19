@@ -5,6 +5,19 @@ import os
 # TODO: adjust this for remote functionality
 json_path = "../CJJ/query_work_files/query_results_2_2_23/"
 file_key = json.load(open('./sayswho/doc_file_key.json'))
+ner_nlp = "./output/model-last/"
+
+"""
+Constants for ent_like matching
+"""
+ent_like_words = [
+    "police",
+    "police sources",
+    "law enforcement sources",
+    "Detective",
+    "Sergeant",
+    "Judge"
+]
 
 """
 Constants for token/entity matching

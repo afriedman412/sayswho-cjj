@@ -1,14 +1,20 @@
 from spacy.tokens import Span, SpanGroup, Token
-from .textacy_boot_helpers import DQTriple
+from .quote_helpers import DQTriple
 from collections import namedtuple
 from typing import Union
 from spacy.symbols import PRON
 from .constants import min_entity_diff, min_speaker_diff, min_length
 
-QuoteClusterMatch: tuple[int, Union[int, None], Union[int, None], bool, str] = namedtuple(
+QuoteClusterMatch: tuple[int, int, int, int] = namedtuple(
     "QuoteClusterMatch", 
-    ["quote_index", "cluster_index", "span_index", "contains_ent", "ent_method"], 
-    defaults=(0, None, None, False, None)
+    ["quote_index", "cluster_index", "span_index"], 
+    defaults=(None, None, None)
+)
+
+QuoteEntMatch: tuple[int, int, int, int] = namedtuple(
+    "QuoteEntMatch", 
+    ["quote_index", "cluster_index", "person_index", "ent_index"],
+    defaults=(None, None, None, None)
 )
 
 ClusterEntMatch: tuple[int, int, Span, int] = namedtuple(
@@ -21,7 +27,7 @@ Boundaries: tuple[int, int] = namedtuple(
     ['start', 'end']
 )
 
-def get_boundaries(t: Union[Token, Span]) -> Boundaries:
+def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
     """
     Convenience function that returns a Boundaries tuple with the start and the end character of t.
 
@@ -39,12 +45,27 @@ def get_boundaries(t: Union[Token, Span]) -> Boundaries:
     if isinstance(t, Span):
         return Boundaries(t.start_char, t.end_char)
     
+    if isinstance(t, DQTriple):
+        return Boundaries(
+            get_boundaries(t.speaker[0]).start,
+            get_boundaries(t.speaker[-1]).end,
+            )
+    
     else:
         raise TypeError("input needs to be Token or Span!")
+    
+def get_text(t: Union[Token, Span, list]) -> str:
+    """
+    Convenience function, because quote speakers are lists of tokens.
+    """
+    if isinstance(t, Token) or isinstance(t, Span):
+        return t.text
+    if isinstance(t, list):
+        return ' '.join([t_.text for t_ in t])
 
-def text_contains(
-        t1: Union[Span, Token],
-        t2: Union[Span, Token]
+def span_contains(
+        t1: Union[Span, Token, DQTriple],
+        t2: Union[Span, Token, DQTriple]
 ) -> bool:
     """
     Does t1 contain t2 or v/v? Assumes both are from the same doc!!
@@ -68,11 +89,12 @@ def text_contains(
     else:
         return False
 
-def format_cluster(cluster, min_length: int):
+def format_cluster(cluster, min_length: int=min_length):
     """
     Removes cluster duplicates and sorts cluster by reverse length.
 
     TODO: is there any reason to not remove duplicates here?
+    TODO: remove pronouns
 
     Input:
         cluster - coref cluster
@@ -83,8 +105,16 @@ def format_cluster(cluster, min_length: int):
     unique_spans = list(set([span for span in cluster]))
     sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
     return [s for s in sorted_spans if len(s.text) > min_length]
+
+def pronoun_check(t, doc=None):
+    if len(t) == 1:
+        if doc:
+            return doc[t[0].i].pos_ == PRON
+        else:
+            return t[0].pos_ == PRON
+    return False
     
-def get_manual_speakers(quote, clusters):
+def get_manual_speaker_cluster(quote, cluster):
     """
     If the match doesn't have a cluster, find any speakers in clusters that match manually.
 
@@ -96,15 +126,12 @@ def get_manual_speakers(quote, clusters):
             len(quote.speaker) > 1,
             quote.speaker[0].pos_ != PRON
         ]):
-        manual_speakers = []
         speaker = ' '.join([s.text for s in quote.speaker])
-        for span in clusters.values():
-            for v_ in span:
-                if speaker in v_.text.replace("@", "'"):
-                    manual_speakers.append(v_)
-        return manual_speakers
+        for span in cluster:
+            if speaker in span.text.replace("@", "'"):
+                return True
     else:
-        return
+        return False
     
 def compare_quote_to_cluster(
         quote: DQTriple, 
@@ -170,5 +197,37 @@ def compare_spans(
 
     """
     return all([
-            abs(getattr(s1, attr)-getattr(s2,attr)) < min_entity_diff for attr in ['start', 'end']
+            abs(getattr(s1, attr)-getattr(s2, attr)) < min_entity_diff for attr in ['start', 'end']
         ])
+
+def quick_ent_analyzer(
+        quote_person_pairs, 
+        quote_cluster_pairs, 
+        quote_ent_pairs,
+        cluster_ent_pairs,
+        cluster_person_pairs,
+        person_ent_pairs
+        ):
+    ent_matches = []
+    for qp in quote_person_pairs:
+        for pe in person_ent_pairs:
+            if qp[1] == pe[0]:
+                ent_matches.append(QuoteEntMatch(qp[0], None, pe[0], pe[1]))
+
+    for qc in quote_cluster_pairs:
+        for ce in cluster_ent_pairs:
+            if qc[1] == ce[0]:
+                ent_matches.append(QuoteEntMatch(qc[0], ce[0], None, ce[1]))
+        for cp in cluster_person_pairs:
+            if qc[1] == cp[0]:
+                for pe in person_ent_pairs:
+                    if cp[1] == pe[0]:
+                        ent_matches.append(QuoteEntMatch(qc[0], cp[0], pe[0], pe[1]))
+
+    for qc in quote_cluster_pairs:
+        if qc[1] == None:
+            ent_matches.append(QuoteEntMatch(qc[0]))
+
+    for qe in quote_ent_pairs:
+        ent_matches.append(QuoteEntMatch(qe[0], None, None, qe[1]))
+    return set(ent_matches)

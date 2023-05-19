@@ -3,7 +3,7 @@ Cribbed from textacy!!!
 """
 import pytest
 import spacy
-from sayswho.textacy_bootleg import direct_quotations
+from sayswho.quotes import direct_quotations
 
 
 @pytest.mark.parametrize(

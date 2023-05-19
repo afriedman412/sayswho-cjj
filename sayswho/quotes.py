@@ -7,7 +7,7 @@ from operator import attrgetter
 from typing import Iterable
 from spacy.tokens import Doc, Span, Token
 from .constants import QUOTATION_MARK_PAIRS, _ACTIVE_SUBJ_DEPS
-from .textacy_boot_helpers import (
+from .quote_helpers import (
     DQTriple, expand_noun, expand_verb, windower, filter_cue_candidates, filter_speaker_candidates
 )
 
