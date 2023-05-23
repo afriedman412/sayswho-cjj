@@ -38,6 +38,7 @@ def full_parse(data: dict, char: str=" ") -> str:
     - finds biggest bodytext tag in soup
     - makes list of all paragraph text in bodytext, formatting each text with fix_quote
     - joins paragraphs with char and returns
+    - replaces "\'\'" with "\"", which causes problems with quote detection
 
     Input: 
         data (dict) - data of article as extracted from json archive file
@@ -52,6 +53,7 @@ def full_parse(data: dict, char: str=" ") -> str:
         texts.append(fix_quotes(p.text.strip(), False))
 
     full_text = char.join(texts)
+    full_text = re.sub("\'\'", "\"", full_text)
     return full_text
 
 def extract_soup(data: dict):

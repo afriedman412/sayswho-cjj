@@ -8,6 +8,7 @@ from typing import Union
 from fuzzywuzzy import fuzz
 from .attribution_helpers import (
     QuoteClusterMatch,
+    QuoteEntMatch,
     ClusterEntMatch,
     span_contains, 
     compare_spans, 
@@ -24,13 +25,18 @@ from .constants import ent_like_words, ner_nlp, min_length, ent_like_words
 class Attributor:
     def __init__(
             self, 
-            nlp="en_coreference_web_trf",
-            t_nlp="en_core_web_sm",
+            coref_nlp="en_coreference_web_trf",
+            base_nlp="en_core_web_sm",
             ner_nlp=ner_nlp
             ):
-        self.nlp = spacy.load(nlp)
-        self.t_nlp_model = t_nlp
-        self.t_nlp = spacy.load(t_nlp)
+        self.coref_nlp = spacy.load(coref_nlp)
+        base_nlp = spacy.load(base_nlp)
+        for p in ['tok2vec', 'tagger', 'parser', 'attribute_ruler', 'lemmatizer', 'ner'][::-1]:
+            try:
+                self.coref_nlp.add_pipe(p, source=base_nlp, first=True)
+            except ValueError:
+                print('problem adding pipe to coref nlp')
+                continue
         if ner_nlp:
             self.ner_nlp = spacy.load(ner_nlp)
             self.ner_nlp.add_pipe("sentencizer")
@@ -56,13 +62,13 @@ class Attributor:
     @property
     def reduce_ent_matches(self):
         if 'ent_matches' in self.__dict__:
-            return set([(q.quote_index, q.cluster_index) for q in self.ent_matches])
+            return set([(q.quote_index, q.ent_index) for q in self.ent_matches])
         
     def attribute(self, t):
         self.parse_text(t)
         self.quotes_to_clusters()
         if self.ner:
-            self.quick_ent_finder()
+            self.get_ent_matches()
 
     def get_ent_score(self):
         if not self.ner:
@@ -73,17 +79,17 @@ class Attributor:
                 [m.quote_index for m in self.ner_matches if m.contains_ent], 
                 len(set([m.ent_method for m in self.ner_matches if m.contains_ent]))
             )
-    def expand_match(self, match: Union[int, QuoteClusterMatch]):
-        if not self.quote_matches:
-            return
-        if isinstance(match, int):
-            match = self.quote_matches[match]
-        print(match.quote_index)
-        print(self.quotes[match.quote_index])
-        print([c for c in format_cluster(self.clusters[match.cluster_index]) if not pronoun_check(c, self.t_doc)])
         
-    
-    
+    def expand_match(self, match: Union[QuoteEntMatch, int]):
+        if isinstance(match, int):
+            match = self.ent_matches[match]
+        for m_ in ['quote', 'cluster', 'person', 'ent']:
+            if getattr(match, f"{m_}_index", None) is not None:
+                i = self.__getattribute__(f"{m_}s")
+                v = getattr(match, f"{m_}_index")
+                data = format_cluster(i[v]) if m_=="cluster" else i[v]
+                print(m_.upper(), f": {v}""\n", data, "\n")
+        
     def get_cluster(self, cluster_index: Union[int, str]):
         """
         Convenience function to a coref cluster using only its index.
@@ -113,7 +119,7 @@ class Attributor:
         TODO: do I need two spacy models? (or three?)
         """
         # instantiate spacy doc
-        self.doc = self.nlp(t) 
+        self.doc = self.coref_nlp(t) 
 
         # extract coref clusters
         self.clusters = {
@@ -121,14 +127,11 @@ class Attributor:
             for k,v in self.doc.spans.items() 
             if k.startswith("coref")
             } 
-        
-        # instantiate textacy spacy doc
-        self.t_doc = self.t_nlp(t) 
-        self.persons = [e for e in self.t_doc.ents if e.label_=="PERSON"]
-        
 
+        self.persons = [e for e in self.doc.ents if e.label_=="PERSON"]
+        
         # extract quotations
-        self.quotes = [q for q in direct_quotations(self.t_doc)]
+        self.quotes = [q for q in direct_quotations(self.doc)]
 
         if self.ner:
             self.ner_doc = self.ner_nlp(t)
@@ -215,9 +218,19 @@ class Attributor:
                         )
         return
     
+    def get_ent_matches(self):
+        quote_person_pairs, quote_cluster_pairs, quote_ent_pairs, cluster_ent_pairs, cluster_person_pairs, person_ent_pairs = self.macro_ent_finder()
+        self.ent_matches = quick_ent_analyzer(
+                        quote_person_pairs, 
+                        quote_cluster_pairs, 
+                        quote_ent_pairs,
+                        cluster_ent_pairs,
+                        cluster_person_pairs,
+                        person_ent_pairs
+                                        )
 
 
-    def quick_ent_finder(self):
+    def macro_ent_finder(self):
         """
         Messy but lite ent finder. Easier than keeping track of all the ways to match ent and cluster.
 
@@ -227,45 +240,45 @@ class Attributor:
         quote_ent_pairs = []
         quote_cluster_pairs = []
         for quote_index, quote in enumerate(self.quotes):
-            if any([' '.join([s.text for s in quote.speaker]).lower() in elw for elw in ent_like_words]):
-                quote_cluster_pairs.append((quote_index, None))
+            if any([' '.join([s.text for s in quote.speaker]).lower() == elw for elw in ent_like_words]):
+                quote_cluster_pairs.append((quote_index, None, 1))
             for person_index, person in enumerate(self.persons):
                 if span_contains(quote, person):
-                    quote_person_pairs.append((quote_index, person_index))
+                    quote_person_pairs.append((quote_index, person_index, 2))
             for ent_index, ent in enumerate(self.ents):
                 if span_contains(quote, ent):
-                    quote_ent_pairs.append((quote_index, ent_index))
+                    quote_ent_pairs.append((quote_index, ent_index, 3))
             for cluster_index, cluster in self.clusters.items():
                 for span_index, span in enumerate(cluster):
                     if compare_quote_to_cluster_member(quote, span):
-                        quote_cluster_pairs.append((quote_index, cluster_index))
+                        quote_cluster_pairs.append((quote_index, cluster_index, 4))
                         
         cluster_ent_pairs = []
         cluster_person_pairs = []
         for cluster_index, cluster in self.clusters.items():
             for span_index, span in enumerate(cluster):
-                if not pronoun_check(span, self.t_doc):
+                if not pronoun_check(span):
                     for ent_index, ent in enumerate(self.ents):
                         if compare_spans(span, ent) or fuzz.partial_ratio(span.text, ent.text) > 95:
-                            cluster_ent_pairs.append((cluster_index, ent_index))
+                            cluster_ent_pairs.append((cluster_index, ent_index, 5))
                     for person_index, person in enumerate(self.persons):
                         if span_contains(person, span):
-                            cluster_person_pairs.append((cluster_index, person_index))
+                            cluster_person_pairs.append((cluster_index, person_index, 6))
                     
         person_ent_pairs = []
         for person_index, p in enumerate(self.persons):
             for ent_index, ent in enumerate(self.ents):
                 if span_contains(p, ent):
-                    person_ent_pairs.append((person_index, ent_index))
+                    person_ent_pairs.append((person_index, ent_index, 7))
 
-        self.ent_matches = quick_ent_analyzer(
-                        quote_person_pairs, 
-                        quote_cluster_pairs, 
-                        quote_ent_pairs,
-                        cluster_ent_pairs,
-                        cluster_person_pairs,
-                        person_ent_pairs
-                                        )
+        return (
+            quote_person_pairs, 
+            quote_cluster_pairs, 
+            quote_ent_pairs,
+            cluster_ent_pairs,
+            cluster_person_pairs,
+            person_ent_pairs
+            )
         
 
 

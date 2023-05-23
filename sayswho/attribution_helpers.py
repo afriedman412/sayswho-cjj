@@ -22,10 +22,21 @@ ClusterEntMatch: tuple[int, int, Span, int] = namedtuple(
     ["cluster_index", "span_index", "span", "ent_start"]
 )
 
+EvalResults: tuple[int, int, int] = namedtuple(
+    "EvalResults", ["n_quotes", "n_ent_quotes", "n_ents_quoted"]
+    )
+
 Boundaries: tuple[int, int] = namedtuple(
     "boundaries",
     ['start', 'end']
 )
+
+def evaluate(a):
+    return EvalResults(
+        len(a.quotes), 
+        len(set([m[0] for m in list(a.reduce_ent_matches)])),
+        len(set([m[1] for m in list(a.reduce_ent_matches)]))
+    )
 
 def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
     """
@@ -89,29 +100,34 @@ def span_contains(
     else:
         return False
 
-def format_cluster(cluster, min_length: int=min_length):
-    """
-    Removes cluster duplicates and sorts cluster by reverse length.
 
-    TODO: is there any reason to not remove duplicates here?
-    TODO: remove pronouns
 
-    Input:
-        cluster - coref cluster
+def format_cluster(cluster):
+    return list(set([c.text for c in cluster if c[0].pos_ != "PRON"]))
 
-    Output:
-        list of unique spans in the cluster
-    """
-    unique_spans = list(set([span for span in cluster]))
-    sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
-    return [s for s in sorted_spans if len(s.text) > min_length]
+# def format_cluster(cluster, min_length: int=min_length):
+#     """
+#     Removes cluster duplicates and sorts cluster by reverse length.
+
+#     TODO: is there any reason to not remove duplicates here?
+#     TODO: remove pronouns
+
+#     Input:
+#         cluster - coref cluster
+
+#     Output:
+#         list of unique spans in the cluster
+#     """
+#     unique_spans = list(set([span for span in cluster]))
+#     sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
+#     return [s for s in sorted_spans if len(s.text) > min_length]
 
 def pronoun_check(t, doc=None):
     if len(t) == 1:
         if doc:
-            return doc[t[0].i].pos_ == PRON
+            return doc[t[0].i].pos_ == "PRON"
         else:
-            return t[0].pos_ == PRON
+            return t[0].pos_ == "PRON"
     return False
     
 def get_manual_speaker_cluster(quote, cluster):
@@ -218,6 +234,7 @@ def quick_ent_analyzer(
         for ce in cluster_ent_pairs:
             if qc[1] == ce[0]:
                 ent_matches.append(QuoteEntMatch(qc[0], ce[0], None, ce[1]))
+
         for cp in cluster_person_pairs:
             if qc[1] == cp[0]:
                 for pe in person_ent_pairs:
@@ -230,4 +247,5 @@ def quick_ent_analyzer(
 
     for qe in quote_ent_pairs:
         ent_matches.append(QuoteEntMatch(qe[0], None, None, qe[1]))
-    return set(ent_matches)
+
+    return list(set(ent_matches))

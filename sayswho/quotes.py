@@ -61,7 +61,6 @@ def direct_quotations(doc: Doc) -> Iterable[DQTriple]:
         ):
             continue
 
-        triple = None
         for n, window_sents in enumerate([
             windower(qtok_start_idx, qtok_end_idx, doc, True), 
             windower(qtok_start_idx, qtok_end_idx, doc)

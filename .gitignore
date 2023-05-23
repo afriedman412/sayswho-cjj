@@ -10,6 +10,7 @@ parse_text.txt
 *.**v
 *.zip
 temp.html
+*0000-00.html
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -2,26 +2,56 @@
 from .article_helpers import extract_soup, get_metadata, full_parse
 from .sayswho import Attributor
 from jinja2 import Environment, FileSystemLoader
-from spacy.tokens import Doc, Span, Token
+from spacy.tokens import Doc, Span
+from spacy import displacy
+from textacy.extract.triples import DQTriple
 from typing import Iterable
-import os
 
-def render_qa(qa: Attributor):
-    ents = consolidate_ents(qa)
-    return highlight_ents(qa.ner_doc, ents)
+def render_data(
+        data: dict, 
+        quotes: Iterable=None, 
+        color: str='LightGreen', 
+        save_file: bool=False) -> dict:
+    """
+    Renders article data into HTML and highlights quotes in HTML, returns metadata for further use.
+    TODO: integrate this into quoteAttribution
+
+    Input:
+        data (dict) - lexis document query result
+        quotes (list) - list of textacy-extract quote triples
+        color (str) - css-friendly string for quote highlight color
+        save_file (bool) - if True, rename saved file from "temp.html" to (doc_id).html
+
+    Output:
+        metadata (dict) - article metadata
+    """
+    rendered, metadata = render_basic(data)
+    rendered_w_quotes = render_quotes(rendered, quotes, color)
+
+    file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
+
+    with open(file_name, "w+") as f:
+        f.write(rendered_w_quotes.replace("@", "'"))
+
+    return metadata
+
+
+def render_qa(a: Attributor):
+    ents = consolidate_ents(a)
+    return highlight_ents(a.ner_doc, ents)
 
 def highlight_ents(
         doc: Doc, 
         ents: Iterable[Span]) -> str:
     """
-    Creates a HTML-ready text with quotes and LE entities highlighted in CSS.
+    Creates a HTML-ready text with ents highlighted in CSS.
 
     Input:
         doc (Doc) - spacy doc
         ents (spans) - list/gen of spans tagged as entities by NER
 
     Output:
-        I can't remember.
+        html text with highlighted quotes and ents
     """
     output_text = []
     i = 0
@@ -41,17 +71,17 @@ def highlight_ents(
 
     return ' '.join(output_text)
 
-def consolidate_ents(qa: Attributor) -> Iterable[Span]:
+def consolidate_ents(a: Attributor) -> Iterable[Span]:
     """
     Combines and orders quotes and LE ents for HTML parsing.
 
     Input:
-        qa - quoteAttributor object
+        a - quoteAttributor object
 
     Ouput:
         ents - list of QUOTE and LAW ENFORCEMENT entities sorted by start character
     """
-    all_ents = list(qa.ner_doc.ents) + [Span(qa.ner_doc, q.content.start, q.content.end, "QUOTE") for q in qa.quotes]
+    all_ents = list(a.ner_doc.ents) + [Span(a.ner_doc, q.content.start, q.content.end, "QUOTE") for q in a.quotes]
     ents = sorted([e for e in all_ents], key=lambda e: e.start)
     return ents
 
@@ -96,10 +126,13 @@ def render_basic(data: dict) -> Iterable:
     rendered = Environment(
         loader=FileSystemLoader("./")
     ).get_template('article_template.html').render(metadata)
-    # rendered = normalize.quotation_marks(rendered)
     return rendered, metadata
 
-def render_quotes(rendered, quotes, color="LightGreen"):
+
+def render_quotes(
+        rendered: str, 
+        quotes: Iterable[DQTriple], 
+        color: str="LightGreen") -> str:
     """
     Renders quotes into HTML.
     TODO: type hints
@@ -122,30 +155,30 @@ def render_quotes(rendered, quotes, color="LightGreen"):
                 )
     return rendered
 
-def render_data(
-        data: dict, 
-        quotes: Iterable=None, 
-        color: str='LightGreen', 
-        save_file: bool=False) -> dict:
+
+def double_viz(a: Attributor):
     """
-    Renders article data into HTML and highlights quotes in HTML, returns metadata for further use.
-    TODO: integrate this into quoteAttribution
+    Displacy visualizatino of all quotes and law enforcement entities.
 
-    Input:
-        data (dict) - lexis document query result
-        quotes (list) - list of textacy-extract quote triples
-        color (str) - css-friendly string for quote highlight color
-        save_file (bool) - if True, rename saved file from "temp.html" to (doc_id).html
-
-    Output:
-        metadata (dict) - article metadata
+    TODO: Doesn't recognize line breaks, and that is a problem.
     """
-    rendered, metadata = render_basic(data)
-    rendered_w_quotes = render_quotes(rendered, quotes, color)
+    a.doc.spans['custom'] = [
+        Span(a.doc, e.start, e.end, "LAW ENFORCEMENT") for e in a.ner_doc.ents
+    ] + [
+        Span(a.doc, q.content.start, q.content.end, 'QUOTE') for q in a.quotes
+    ]
+    
+    html = displacy.render(
+        a.doc, 
+        style="span", 
+        options={
+            "spans_key":"custom",
+            "colors": {
+                "LAW ENFORCEMENT": "lightgreen",
+                "QUOTE": "lightblue"
+                    }
+        },
+        page=True
+    )
+    return
 
-    file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
-
-    with open(file_name, "w+") as f:
-        f.write(rendered_w_quotes.replace("@", "'"))
-
-    return metadata
