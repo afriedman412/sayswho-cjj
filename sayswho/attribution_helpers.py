@@ -1,4 +1,4 @@
-from spacy.tokens import Span, SpanGroup, Token
+from spacy.tokens import Span, SpanGroup, Token, Doc
 from .quote_helpers import DQTriple
 from collections import namedtuple
 from typing import Union
@@ -37,6 +37,21 @@ def evaluate(a):
         len(set([m[0] for m in list(a.reduce_ent_matches)])),
         len(set([m[1] for m in list(a.reduce_ent_matches)]))
     )
+
+def filter_duplicate_ents(ents) -> tuple:
+    """
+    Removes duplicate entities by text.
+    """
+    ent_text = []
+    ent_bucket = []
+
+    for e in ents:
+        if e.text in ent_text:
+            continue
+        else:
+            ent_text.append(e.text)
+            ent_bucket.append(e)
+    return ent_bucket
 
 def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
     """
@@ -100,29 +115,13 @@ def span_contains(
     else:
         return False
 
-
-
 def format_cluster(cluster):
     return list(set([c.text for c in cluster if c[0].pos_ != "PRON"]))
 
-# def format_cluster(cluster, min_length: int=min_length):
-#     """
-#     Removes cluster duplicates and sorts cluster by reverse length.
-
-#     TODO: is there any reason to not remove duplicates here?
-#     TODO: remove pronouns
-
-#     Input:
-#         cluster - coref cluster
-
-#     Output:
-#         list of unique spans in the cluster
-#     """
-#     unique_spans = list(set([span for span in cluster]))
-#     sorted_spans = sorted(unique_spans, key=lambda s: len(s.text), reverse=True)
-#     return [s for s in sorted_spans if len(s.text) > min_length]
-
-def pronoun_check(t, doc=None):
+def pronoun_check(t: Span, doc: Doc=None):
+    """
+    Checks to see if t is a single pronoun.
+    """
     if len(t) == 1:
         if doc:
             return doc[t[0].i].pos_ == "PRON"
@@ -136,15 +135,15 @@ def get_manual_speaker_cluster(quote, cluster):
 
     The idea here is if the speaker is "Rosenberg" to pull "Detective Jeff Rosenberg" from the clusters.
 
-    Attributor runs this automatically with its clusters if the match doesn't have a cluster!
+    TODO: Add this back into attribution code, and a test.
     """
     if any([
             len(quote.speaker) > 1,
-            quote.speaker[0].pos_ != PRON
+            quote.speaker[0].pos_ != "PRON"
         ]):
         speaker = ' '.join([s.text for s in quote.speaker])
         for span in cluster:
-            if speaker in span.text.replace("@", "'"):
+            if speaker in span.text:
                 return True
     else:
         return False
@@ -248,4 +247,4 @@ def quick_ent_analyzer(
     for qe in quote_ent_pairs:
         ent_matches.append(QuoteEntMatch(qe[0], None, None, qe[1]))
 
-    return list(set(ent_matches))
+    return sorted(list(set(ent_matches)), key=lambda m: m.quote_index)

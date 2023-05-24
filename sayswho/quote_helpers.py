@@ -14,19 +14,16 @@ def filter_cue_candidates(tok):
         tok.lemma_ in _reporting_verbs
     ])
 
-def get_cue_candidates(window_sents):
-    return [
-            tok
-            for sent in window_sents
-            for tok in sent
-            if filter_cue_candidates(tok)
-        ]
-
 def filter_speaker_candidates(ch, i, j):
     return all([
             ch.pos!=PUNCT,
             ((ch.i >= i and ch.i >= j) or (ch.i <= i and ch.i <= j)),
         ])
+
+def filter_quote_tokens(tok, qtok_pair_idxs):
+    return any(
+            qts_idx <= tok.i <= qte_idx for qts_idx, qte_idx in qtok_pair_idxs
+        )
 
 def expand_noun(tok: Token) -> list[Token]:
     """Expand a noun token to include all associated conjunct and compound nouns."""

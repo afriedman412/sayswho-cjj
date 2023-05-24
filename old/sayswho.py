@@ -10,8 +10,9 @@ import spacy_transformers
 from .textacy_bootleg import DQTriple, direct_quotations
 from typing import List, Union
 from .attribution_helpers import (
-    LilMatch, ClusterEnt, Match, compare_quote_to_cluster, compare_spans, text_contains
+    LilMatch, ClusterEnt, compare_quote_to_cluster, compare_spans, text_contains
 )
+
 
 class quoteAttributor:
     """
@@ -53,8 +54,7 @@ class quoteAttributor:
             self, 
             t: str, 
             apostrophe_mask="@", 
-            linebreak_mask=None,
-            expand_matches=True
+            linebreak_mask=None
             ):
         """
         Loads input text into spacy, gets entities (if NER is provided), gets quotes with textacy, attributes quotes to clusters.
@@ -70,15 +70,11 @@ class quoteAttributor:
         self.linebreak_mask = linebreak_mask
 
         if self.ner:
-            # this was self.extract_entities, but easier to just do here
             self.ner_doc = self.ner_nlp(t)
             self.ents = self.ner_doc.ents
             self.get_ent_clusters()
         
         self.quotes_to_clusters()
-
-        if expand_matches:
-            self.expand_matches()
         return
     
     @property
@@ -93,15 +89,11 @@ class quoteAttributor:
     
     def clusto(self):
         """
-        Shows clusters with duplicates removed and apostrophe masks replaced.)
+        Shows clusters with duplicates removed.
         """
         if 'clusters' in self.__dict__:
             for k,v in self.clusters.items():
-                print(str(k) + ":", ' | '.join(set([t.text.lower().replace(self.apostrophe_mask, "'") for t in v])))
-
-    def show_big_matches(self):
-        for m in self.big_matches:
-            print(m, '\n', m.cluster_index, '\n')
+                print(str(k) + ":", ' | '.join(set([t.text.lower() for t in v])))
     
     def get_cluster(self, cluster_index: Union[int, str]):
         """
@@ -117,27 +109,6 @@ class quoteAttributor:
             return self.doc.spans[f"coref_clusters_{cluster_index}"]
         except KeyError:
             return
-        
-    def expand_match(self, lil_match: Union[LilMatch, int]):
-        """
-        Converts a LilMatch into a Match
-        Input:
-            match (LilMatch) - a quote/cluster match tuple (quote index, cluster number, index of span in cluster)
-            
-            OR
-
-            match (int) - a match index
-
-        Output:
-            big_match - a Match object
-        """
-        if isinstance(lil_match, int):
-            lil_match = self.matches[lil_match]
-
-        return Match(self, lil_match)
-    
-    def expand_matches(self):
-        self.big_matches = [self.expand_match(m) for m in self.matches]
     
     def parse_text(self, t: str):
         """ 

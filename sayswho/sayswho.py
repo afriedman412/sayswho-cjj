@@ -16,7 +16,8 @@ from .attribution_helpers import (
     format_cluster, 
     compare_quote_to_cluster_member,
     quick_ent_analyzer,
-    pronoun_check
+    pronoun_check,
+    filter_duplicate_ents
     )
 from .quotes import direct_quotations
 from .quote_helpers import DQTriple
@@ -62,7 +63,11 @@ class Attributor:
     @property
     def reduce_ent_matches(self):
         if 'ent_matches' in self.__dict__:
-            return set([(q.quote_index, q.ent_index) for q in self.ent_matches])
+            return sorted(
+                list(
+                set([(q.quote_index, q.ent_index) for q in self.ent_matches])
+                ), key=lambda m: m[0]
+                )
         
     def attribute(self, t):
         self.parse_text(t)
@@ -121,20 +126,20 @@ class Attributor:
         # instantiate spacy doc
         self.doc = self.coref_nlp(t) 
 
+        # extract quotations
+        self.quotes = [q for q in direct_quotations(self.doc)]
+
         # extract coref clusters
         self.clusters = {
             int(k.split("_")[-1]):v 
             for k,v in self.doc.spans.items() 
             if k.startswith("coref")
             } 
-
-        self.persons = [e for e in self.doc.ents if e.label_=="PERSON"]
         
-        # extract quotations
-        self.quotes = [q for q in direct_quotations(self.doc)]
-
         if self.ner:
             self.ner_doc = self.ner_nlp(t)
+            self.persons = [e for e in self.doc.ents if e.label_=="PERSON"]
+            self.ner_doc.ents = filter_duplicate_ents(self.ner_doc.ents)
             self.get_ent_clusters()
         return
     

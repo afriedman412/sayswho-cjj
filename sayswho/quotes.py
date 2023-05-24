@@ -31,7 +31,8 @@ def direct_quotations(doc: Doc) -> Iterable[DQTriple]:
     qtok = [tok for tok in doc if tok.is_quote]
     qtok_pair_idxs = []
     for n, q in enumerate(qtok):
-        if q.i not in [q_[1] for q_ in qtok_pair_idxs]:
+        # whitespace is decent predictor of right punctuation!
+        if not bool(q.whitespace_) and q.i not in [q_[1] for q_ in qtok_pair_idxs]:
             for q_ in qtok[n+1:]:
                 if (ord(q.text), ord(q_.text)) in QUOTATION_MARK_PAIRS:
                     qtok_pair_idxs.append((q.i, q_.i))

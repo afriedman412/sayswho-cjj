@@ -4,7 +4,7 @@ from .sayswho import Attributor
 from jinja2 import Environment, FileSystemLoader
 from spacy.tokens import Doc, Span
 from spacy import displacy
-from textacy.extract.triples import DQTriple
+from .quote_helpers import DQTriple
 from typing import Iterable
 
 def render_data(
