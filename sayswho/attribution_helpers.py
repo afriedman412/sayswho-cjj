@@ -1,41 +1,70 @@
-from spacy.tokens import Span, SpanGroup, Token, Doc
+from .constants import min_entity_diff, min_speaker_diff, Boundaries, QuoteEntMatch
 from .quote_helpers import DQTriple
-from collections import namedtuple
-from typing import Union
-from spacy.symbols import PRON
-from .constants import min_entity_diff, min_speaker_diff, min_length
+from spacy.tokens import Span, SpanGroup, Token, Doc
+from typing import Union, Literal, Tuple
+import statistics
+from rapidfuzz import fuzz
 
-QuoteClusterMatch: tuple[int, int, int, int] = namedtuple(
-    "QuoteClusterMatch", 
-    ["quote_index", "cluster_index", "span_index"], 
-    defaults=(None, None, None)
-)
 
-QuoteEntMatch: tuple[int, int, int, int] = namedtuple(
-    "QuoteEntMatch", 
-    ["quote_index", "cluster_index", "person_index", "ent_index"],
-    defaults=(None, None, None, None)
-)
+def get_cluster_people_scores(cluster: SpanGroup, scorer: Literal['prat', 'cos']='prat') -> Tuple[list, float]:
+    """
+    Calculates average similarity between any two PERSONS in the cluster.
+    These scores are used to exclude "odd man out" cluster members.
 
-ClusterEntMatch: tuple[int, int, Span, int] = namedtuple(
-    "ClusterEntMatch",
-    ["cluster_index", "span_index", "span", "ent_start"]
-)
+    TODO: tweak cutoff value, or at least make it flexible
 
-EvalResults: tuple[int, int, int] = namedtuple(
-    "EvalResults", ["n_quotes", "n_ent_quotes", "n_ents_quoted"]
-    )
+    Input:
+        cluster (SpanGroup) - coref cluster
+        scorer (str) - what score to use to determine similarity. can be 'prat' (partial ratio) or 'cos' (cosine similarity).
 
-Boundaries: tuple[int, int] = namedtuple(
-    "boundaries",
-    ['start', 'end']
-)
+    Output:
+        list(tuple) - index, span, average score for each span in the cluster
+        cutoff (float) - minimum score for keeping cluster member (mean - 2stdev)
+    """
+    if scorer=='prat':
+        score_func = lambda s1, s2: fuzz.partial_ratio(s1.text, s2.text)
+    elif scorer=='cos':
+        score_func = lambda s1, s2: s1.similarity(s2) 
+    
+    # filter out non-persons
+    cluster_ = [span for span in cluster if person_check(span)]
+      
+    all_scores = []
+    for n, span in enumerate(cluster_):
+        scores = [score_func(span, span_) for span_ in cluster_]
+        if scores:
+            all_scores.append((n, span, sum(scores)/len(scores))) 
+    if len(all_scores) > 1:
+        cutoff = statistics.mean([c[-1] for c in all_scores]) - 2*statistics.stdev([c[-1] for c in all_scores])
+        return sorted(all_scores, key=lambda k: k[-1]), cutoff
+    else:
+        return [], None
+    
+def prune_cluster_people(cluster: SpanGroup, scorer='prat') -> list:
+    """
+    Removes outlier PERSONS from a cluster, based on provided score.
+    TODO: SpanGroup instead of list?
 
-def evaluate(a):
-    return EvalResults(
-        len(a.quotes), 
-        len(set([m[0] for m in list(a.reduce_ent_matches)])),
-        len(set([m[1] for m in list(a.reduce_ent_matches)]))
+    Input:
+        cluster (SpanGroup) - a coref cluster
+
+    Output:
+        list - coref cluster with outlier PERSONS removed
+    """
+    scores, cutoff = get_cluster_people_scores(cluster, scorer=scorer)
+    filtered = [c[1] for c in scores if c[-1] < cutoff]
+    return [c for c in cluster if c not in filtered]
+
+def clone_cluster(cluster: SpanGroup, destination_doc: Doc):
+    """
+    For copying a coref cluster to a different Doc.
+
+    Necessary because I'm using multiple models (of different sizes) to do coreferencing and other NLP tasks.
+    It's easier to consolidate the clusters than to combine the tasks into one model.
+    """
+    return SpanGroup(
+        doc=destination_doc,
+        spans=([destination_doc[span.start:span.end] for span in cluster])
     )
 
 def filter_duplicate_ents(ents) -> tuple:
@@ -94,14 +123,14 @@ def span_contains(
         t2: Union[Span, Token, DQTriple]
 ) -> bool:
     """
-    Does t1 contain t2 or v/v? Assumes both are from the same doc!!
+    Does t1 contain t2 or v/v? Assumes both are from the same doc, or at least same index.
 
     Uses get_boundaries beacuse quote speakers are tokens but entities are spans.
 
     TODO: verify same doc
 
     Input:
-        t1 and t2 - spacy spans or tokens (from the same doc)
+        t1 and t2 - spacy spans or tokens
 
     Output:
         bool - whether either t1 contains the other t2
@@ -128,6 +157,15 @@ def pronoun_check(t: Span, doc: Doc=None):
         else:
             return t[0].pos_ == "PRON"
     return False
+
+def person_check(span: Span):
+    """
+    Convenience function.
+    """
+    try:
+        return span.ents[0].label_ == "PERSON"
+    except IndexError:
+        return False
     
 def get_manual_speaker_cluster(quote, cluster):
     """
@@ -187,6 +225,8 @@ def compare_quote_to_cluster_member(
     Output:
         bool
     """
+    if span[0].pos_ != "PRON" and len(span) < 2 and len(span[0]) < 4:
+        return False
     if abs(quote.speaker[0].sent.start_char - span.sent.start_char) < min_speaker_diff:
         if abs(quote.speaker[0].idx - span.start_char) < min_speaker_diff:
             return True

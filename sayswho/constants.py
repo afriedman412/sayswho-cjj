@@ -1,5 +1,7 @@
 from spacy.symbols import (aux, auxpass, csubj, dobj, neg, nsubj)
 import json
+from collections import namedtuple
+from spacy.tokens import Span
 import os
 
 # TODO: adjust this for remote functionality
@@ -7,16 +9,47 @@ json_path = "../CJJ/query_work_files/query_results_2_2_23/"
 file_key = json.load(open('./sayswho/doc_file_key.json'))
 ner_nlp = "./output/model-last/"
 
+QuoteClusterMatch: tuple[int, int, int, int] = namedtuple(
+    "QuoteClusterMatch", 
+    ["quote_index", "cluster_index", "span_index"], 
+    defaults=(None, None, None)
+)
+
+QuoteEntMatch: tuple[int, int, int, int] = namedtuple(
+    "QuoteEntMatch", 
+    ["quote_index", "cluster_index", "person_index", "ent_index"],
+    defaults=(None, None, None, None)
+)
+
+ClusterEntMatch: tuple[int, int, Span, int] = namedtuple(
+    "ClusterEntMatch",
+    ["cluster_index", "span_index", "span", "ent_start"]
+)
+
+EvalResults: tuple[int, int, int] = namedtuple(
+    "EvalResults", ["n_quotes", "n_ent_quotes", "n_ents_quoted"]
+    )
+
+Boundaries: tuple[int, int] = namedtuple(
+    "boundaries",
+    ['start', 'end']
+)
+
 """
 Constants for ent_like matching
 """
 ent_like_words = [
     "police",
     "police sources",
+    "police spokesperson",
     "law enforcement sources",
     "Detective",
     "Sergeant",
-    "Judge"
+    "Judge",
+    "prosecutors",
+    "U.S. attorney",
+    "warrant",
+    "detective"
 ]
 
 """
