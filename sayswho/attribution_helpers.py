@@ -1,9 +1,10 @@
-from .constants import min_entity_diff, min_speaker_diff, Boundaries, QuoteEntMatch
+from .constants import min_entity_diff, min_speaker_diff, Boundaries, QuoteEntMatch, QuoteClusterMatch
 from .quote_helpers import DQTriple
 from spacy.tokens import Span, SpanGroup, Token, Doc
-from typing import Union, Literal, Tuple
+from typing import Union, Literal, Tuple, Iterable
 import statistics
 from rapidfuzz import fuzz
+import numpy as np
 
 
 def get_cluster_people_scores(cluster: SpanGroup, scorer: Literal['prat', 'cos']='prat') -> Tuple[list, float]:
@@ -225,6 +226,7 @@ def compare_quote_to_cluster_member(
     Output:
         bool
     """
+    # filters out very short strings
     if span[0].pos_ != "PRON" and len(span) < 2 and len(span[0]) < 4:
         return False
     if abs(quote.speaker[0].sent.start_char - span.sent.start_char) < min_speaker_diff:
@@ -255,6 +257,22 @@ def compare_spans(
             abs(getattr(s1, attr)-getattr(s2, attr)) < min_entity_diff for attr in ['start', 'end']
         ])
 
+def fancy_match_maker(a,
+        quote_person_pairs, 
+        quote_cluster_pairs, 
+        quote_ent_pairs,
+        cluster_ent_pairs,
+        cluster_person_pairs,
+        person_ent_pairs
+        ):
+    qp_m = make_mtx('quotes', 'persons', quote_person_pairs)
+    qc_m = make_mtx('quotes', 'clusters', quote_cluster_pairs)
+    qe_m = make_mtx('quotes', 'ents', quote_ent_pairs)
+    ce_m = make_mtx('clusters', 'ents', cluster_ent_pairs)
+    cp_m = make_mtx('clusters', 'persons', cluster_person_pairs)
+    pe_m = make_mtx('persons', 'ents', person_ent_pairs)
+
+
 def quick_ent_analyzer(
         quote_person_pairs, 
         quote_cluster_pairs, 
@@ -263,28 +281,35 @@ def quick_ent_analyzer(
         cluster_person_pairs,
         person_ent_pairs
         ):
+    
+    def attributed_quote_filter(idx, ent_matches):
+        return idx in [m.quote_index for m in ent_matches]
+
     ent_matches = []
+    quote_matches = []
+    
+    for qe in quote_ent_pairs:
+        ent_matches.append(QuoteEntMatch(qe[0], None, None, qe[1]))
+
     for qp in quote_person_pairs:
         for pe in person_ent_pairs:
-            if qp[1] == pe[0]:
+            if qp[1] == pe[0] and not attributed_quote_filter(qp[0], ent_matches):
                 ent_matches.append(QuoteEntMatch(qp[0], None, pe[0], pe[1]))
 
     for qc in quote_cluster_pairs:
-        for ce in cluster_ent_pairs:
-            if qc[1] == ce[0]:
-                ent_matches.append(QuoteEntMatch(qc[0], ce[0], None, ce[1]))
-
-        for cp in cluster_person_pairs:
-            if qc[1] == cp[0]:
-                for pe in person_ent_pairs:
-                    if cp[1] == pe[0]:
-                        ent_matches.append(QuoteEntMatch(qc[0], cp[0], pe[0], pe[1]))
-
-    for qc in quote_cluster_pairs:
-        if qc[1] == None:
+        if qc[1] == None and not attributed_quote_filter(qc[0], ent_matches):
             ent_matches.append(QuoteEntMatch(qc[0]))
+        else:
+            quote_matches.append(QuoteClusterMatch(qc[0], qc[1]))
+            for ce in cluster_ent_pairs:
+                if qc[1] == ce[0] and not attributed_quote_filter(qc[0], ent_matches):
+                    ent_matches.append(QuoteEntMatch(qc[0], ce[0], None, ce[1]))
 
-    for qe in quote_ent_pairs:
-        ent_matches.append(QuoteEntMatch(qe[0], None, None, qe[1]))
+            for cp in cluster_person_pairs:
+                if qc[1] == cp[0]:
+                    for pe in person_ent_pairs:
+                        if cp[1] == pe[0] and not attributed_quote_filter(qc[0], ent_matches):
+                            ent_matches.append(QuoteEntMatch(qc[0], cp[0], pe[0], pe[1]))
+        
 
     return sorted(list(set(ent_matches)), key=lambda m: m.quote_index)

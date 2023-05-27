@@ -9,10 +9,10 @@ json_path = "../CJJ/query_work_files/query_results_2_2_23/"
 file_key = json.load(open('./sayswho/doc_file_key.json'))
 ner_nlp = "./output/model-last/"
 
-QuoteClusterMatch: tuple[int, int, int, int] = namedtuple(
+QuoteClusterMatch: tuple[int, int] = namedtuple(
     "QuoteClusterMatch", 
-    ["quote_index", "cluster_index", "span_index"], 
-    defaults=(None, None, None)
+    ["quote_index", "cluster_index"], 
+    defaults=(None, None)
 )
 
 QuoteEntMatch: tuple[int, int, int, int] = namedtuple(

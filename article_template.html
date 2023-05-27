@@ -38,17 +38,43 @@
                         </center>
                     </div><br>
                     <center>{{ pub_date }}</center>
-                    <div><b>Length: </b>{{ wordcount }} words
-                    </div>
+                    <div><b>Doc ID: </b>{{ doc_id }}</div>
+                    <div><b>Length: </b>{{ wordcount }} words</div>
                     <div><b>Byline: </b>{{ byline }}</div><br>
-                    {{ bodytext}}
+                    <div id="bodytext">
+                        {{ bodytext}}
+                    </div><br>
+                    <div>
+                        <h4>Score:</h4>
+                        <div><b>n quotes: </b>{{ score['n_quotes'] }}</div>
+                        <div><b>n ent quotes: </b>{{ score['n_ent_quotes'] }}</div>
+                        <div><b>n ents quoted: </b>{{ score['n_ents_quoted'] }}</div><br>
+                    </div>
+                    <div>
+                        {% set offset = 1 %}
+                        {% for q in quotes %}
+                        <div>
+                            <p>
+                            <a name="{{ loop.index-offset }}"></a>
+                            <a href="#quote{{ loop.index-offset }}"><h4>Quote {{ loop.index-offset }}</h4></a>
+                                <b>Quote:</b> <span id="quote-data-{{ loop.index-offset }}">{{ q.content }}</span><br>
+                                <b>Cue:</b> <span id="cue-{{ loop.index-offset }}">{{ q.cue }}</span><br>
+                                <b>Speaker: </b><span id="speaker-{{ loop.index-offset }}">{{ q.speaker }}</span><br>
+                                <b>Cluster Index: </b><span id="cluster-index-{{ loop.index-offset }}">{{ q.cluster_index }}</span><br>
+                                <b>Cluster: </b><span id="cluster-{{ loop.index-offset }}">{{ q.cluster }}</span><br>
+                                {% if "ent_index" in q %}
+                                    <b>Ent Index: </b><span id="ent-index-{{ loop.index-offset }}">{{ q.ent_index }}</span><br>
+                                    <b>Ent: </b><span id="ent-{{ loop.index-offset }}">{{ q.ent }}</span><br>
+                                {% endif %}
+
+                                <br>
+                            </p>
+                        </div>
+                    {% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
-    </div>
-    </div>
-    </div>
     </div>
 </body>
 

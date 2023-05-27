@@ -40,6 +40,7 @@ def render_qa(a: Attributor):
     ents = consolidate_ents(a)
     return highlight_ents(a.ner_doc, ents)
 
+
 def highlight_ents(
         doc: Doc, 
         ents: Iterable[Span]) -> str:
@@ -135,7 +136,6 @@ def render_quotes(
         color: str="LightGreen") -> str:
     """
     Renders quotes into HTML.
-    TODO: type hints
 
     Input:
         rendered - HTML-rendered article
@@ -158,7 +158,7 @@ def render_quotes(
 
 def double_viz(a: Attributor):
     """
-    Displacy visualizatino of all quotes and law enforcement entities.
+    Displacy visualization of all quotes and law enforcement entities.
 
     TODO: Doesn't recognize line breaks, and that is a problem.
     """

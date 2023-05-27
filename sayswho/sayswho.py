@@ -4,34 +4,39 @@ Rewritten with less overhead.
 import spacy
 from typing import Union
 from rapidfuzz import fuzz
+import numpy as np
 from .attribution_helpers import (
     span_contains, 
     compare_spans, 
-    compare_quote_to_cluster, 
     format_cluster, 
     compare_quote_to_cluster_member,
-    quick_ent_analyzer,
     pronoun_check,
     filter_duplicate_ents,
     prune_cluster_people,
-    clone_cluster
+    clone_cluster,
+    get_manual_speaker_cluster
     )
 from .quotes import direct_quotations
 from .quote_helpers import DQTriple
-from .constants import ent_like_words, ner_nlp, ent_like_words, QuoteEntMatch, EvalResults, QuoteClusterMatch
+from .constants import ent_like_words, ner_nlp, ent_like_words, QuoteEntMatch, QuoteClusterMatch, EvalResults
 
 class Attributor:
+    """
+    TODO: Add manual speaker matching
+    """
     def __init__(
             self, 
             coref_nlp="en_coreference_web_trf",
             base_nlp="en_core_web_lg",
-            ner_nlp=ner_nlp
+            ner_nlp=ner_nlp,
+            prune=True
             ):
         self.coref_nlp = spacy.load(coref_nlp)
         self.base_nlp = spacy.load(base_nlp)
         if ner_nlp:
             self.ner_nlp = spacy.load(ner_nlp)
             self.ner_nlp.add_pipe("sentencizer")
+        self.prune = prune
 
     @property
     def ner(self):
@@ -80,9 +85,7 @@ class Attributor:
             t (str) - text file to be analyzed and attributed
         """
         self.parse_text(t)
-        self.quotes_to_clusters()
-        if self.ner:
-            self.get_ent_matches()
+        self.get_matches()
 
     def parse_text(self, t: str):
         """ 
@@ -112,6 +115,8 @@ class Attributor:
             for k, cluster in self.coref_doc.spans.items() 
             if k.startswith("coref")
             }
+        if self.prune:
+            self.clusters = {n:prune_cluster_people(cluster) for n, cluster in self.clusters.items()}
         
         self.persons = [e for e in self.doc.ents if e.label_=="PERSON"]
 
@@ -120,117 +125,125 @@ class Attributor:
             self.ner_doc.ents = filter_duplicate_ents(self.ner_doc.ents)
         return
     
-    def quotes_to_clusters(self):
-        self.quote_matches = [
-            match 
-            for quote_index, quote in enumerate(self.quotes)
-            for match in [
-                qc for qc in self.quote_to_clusters(quote, quote_index)
-            ] 
-        ]
-        
-    def quote_to_clusters(
-            self, 
-            quote: DQTriple, 
-            quote_index: int
-            ):
-        """
-        Finds all matching clusters for quote
-
-        Also evalutes each quote/cluster_index match for entity matches.
-
-        Input:
-            quote
-            quote index
-            cluster
-
-        Output:
-            matches (tuple) - tuple of quote/cluster matches in the format tuple(quote index, cluster number, index of span in cluster) ...
-
-            If no match is found, there will be an empty match (n, None None).
-        """
-        for cluster_index, cluster in self.clusters.items():
-            match_index = compare_quote_to_cluster(quote, cluster)
-            if match_index > -1:
-                yield QuoteClusterMatch(quote_index, cluster_index, match_index)
-    
-    def get_ent_matches(self):
+    def get_matches(self):
         """
         Makes all "pair" lists, then runs quick_ent_analyzer to get ent_matches.
 
         This exists because I wanted a step between macro_ent_finder and the results for easier testing.
         """
-        quote_person_pairs, quote_cluster_pairs, quote_ent_pairs, cluster_ent_pairs, cluster_person_pairs, person_ent_pairs = self.macro_ent_finder()
-        self.ent_matches = quick_ent_analyzer(
-                        quote_person_pairs, 
-                        quote_cluster_pairs, 
-                        quote_ent_pairs,
-                        cluster_ent_pairs,
-                        cluster_person_pairs,
-                        person_ent_pairs
-                                        )
+        pairs_dicto = self.macro_ent_finder()
+        self.make_matches(pairs_dicto)
+        
+    def get_manual_quote_ent_pairs(self) -> list:
+        return [
+            QuoteEntMatch(quote_index)
+            for quote_index, quote in enumerate(self.quotes)
+            if any([' '.join([s.text for s in quote.speaker]).lower() == elw for elw in ent_like_words])
+            ]
+    
+    def get_manual_quote_cluster_pairs(self, quote_cluster_pairs):
+        return [
+                (quote_index, cluster_index) 
+                for quote_index, quote in enumerate(self.quotes)
+                if quote_index not in [m[0] for m in set(quote_cluster_pairs)]
+                if quote.speaker[0].text in [p.text for p in self.persons]
+                for cluster_index, cluster in self.clusters.items()
+                if get_manual_speaker_cluster(quote, cluster)
+            ]
 
-    def macro_ent_finder(self, prune=True):
+    def macro_ent_finder(self) -> dict:
         """
         Messy but lite ent finder. Easier than keeping track of all the ways to match ent and cluster.
 
-        Can do 
-
-        TODO: Track spans and methods?
         TODO: Ensure pronouns aren't being skipped!
         TODO: Make ratio threshold a variable
         """
-        quote_person_pairs = []
-        quote_ent_pairs = []
-        quote_cluster_pairs = []
+        pairs_dicto = {p:[] for p in [
+            'quotes_persons', 'quotes_ents', 'quotes_clusters', 
+            'clusters_ents', 'clusters_persons', 'persons_ents'
+            ]}
+
         for quote_index, quote in enumerate(self.quotes):
             if self.ner:
-                if any([' '.join([s.text for s in quote.speaker]).lower() == elw for elw in ent_like_words]):
-                    quote_ent_pairs.append((quote_index, None))
-                for ent_index, ent in enumerate(self.ents):
-                    if span_contains(quote, ent):
-                        quote_ent_pairs.append((quote_index, ent_index))
-            for person_index, person in enumerate(self.persons):
-                if span_contains(quote, person):
-                    quote_person_pairs.append((quote_index, person_index))
-
-            for cluster_index, cluster in self.clusters.items():
-                if prune:
-                    cluster = prune_cluster_people(cluster)
-                for span_index, span in enumerate(cluster):
-                    if compare_quote_to_cluster_member(quote, span):
-                        quote_cluster_pairs.append((quote_index, cluster_index))
+                pairs_dicto['quotes_ents'] += [
+                        (quote_index, ent_index)
+                        for ent_index, ent in enumerate(self.ents)
+                        if span_contains(quote, ent)
+                        ]
+            pairs_dicto['quotes_persons'] += [
+                    (quote_index, person_index)
+                    for person_index, person in enumerate(self.persons)
+                    if span_contains(quote, person)
+                    ]
+            pairs_dicto['quotes_clusters'] += [
+                    (quote_index, cluster_index) 
+                    for cluster_index, cluster in self.clusters.items()
+                    for span in cluster
+                    if compare_quote_to_cluster_member(quote, span)
+                    ]
                         
-        cluster_ent_pairs = []
-        cluster_person_pairs = []
         for cluster_index, cluster in self.clusters.items():
-            if prune:
-                    cluster = prune_cluster_people(cluster)
-            for span_index, span in enumerate(cluster):
+            for span in cluster:
                 if not pronoun_check(span):
                     if self.ner:
-                        for ent_index, ent in enumerate(self.ents):
-                            if compare_spans(span, ent) or fuzz.partial_ratio(span.text, ent.text) > 95:
-                                cluster_ent_pairs.append((cluster_index, ent_index))
-                    for person_index, person in enumerate(self.persons):
-                        if span_contains(person, span):
-                            cluster_person_pairs.append((cluster_index, person_index))
-                    
-        person_ent_pairs = []
-        for person_index, p in enumerate(self.persons):
-            for ent_index, ent in enumerate(self.ents):
-                if span_contains(p, ent):
-                    person_ent_pairs.append((person_index, ent_index, 7))
-
-        return (
-            quote_person_pairs, 
-            quote_cluster_pairs, 
-            quote_ent_pairs,
-            cluster_ent_pairs,
-            cluster_person_pairs,
-            person_ent_pairs
-            )
+                        pairs_dicto['clusters_ents'] += [
+                            (cluster_index, ent_index)
+                            for ent_index, ent in enumerate(self.ents)
+                            if compare_spans(span, ent) 
+                            or fuzz.partial_ratio(span.text, ent.text) > 95
+                            ]
+                    pairs_dicto['clusters_persons'] += [
+                        (cluster_index, person_index)
+                        for person_index, person in enumerate(self.persons)
+                        if span_contains(person, span)
+                        ]
+        pairs_dicto['persons_ents'] += [
+            (person_index, ent_index)
+            for person_index, p in enumerate(self.persons)
+            for ent_index, ent in enumerate(self.ents)
+            if span_contains(p, ent)
+            ]
         
+        pairs_dicto['quotes_clusters'] += self.get_manual_quote_cluster_pairs(pairs_dicto['quotes_clusters'])
+        return pairs_dicto
+    
+    def make_matrix(self, key, pairs):
+        x, y = key.split("_")
+        m = np.zeros([len(self.__getattribute__(_)) for _ in [x,y]])
+        for i,j in pairs:
+            m[i,j] = 1
+        return m
+    
+    def make_matches(self, pairs_dicto: dict):
+        arrays = {k: self.make_matrix(k, v) for k,v in pairs_dicto.items()}
+
+        self.ent_matches = [
+            QuoteEntMatch(quote_index=i, ent_index=j) for i,j in np.concatenate(
+                [
+                    np.transpose(np.nonzero(arrays['quotes_ents'])),
+                    np.transpose(np.nonzero(arrays['quotes_clusters'].dot(arrays['clusters_ents']))),
+                    np.transpose(np.nonzero(arrays['quotes_persons'].dot(arrays['persons_ents']))),
+                    np.transpose(
+                        np.nonzero(
+                            arrays['quotes_clusters'].dot(arrays['clusters_persons'].dot(arrays['persons_ents']))
+                        )
+                    )
+                ]
+            )]
+        
+        self.ent_matches = sorted(
+            list(set(self.ent_matches + self.get_manual_quote_ent_pairs())),
+            key=lambda m: m.quote_index
+            )
+
+        self.quote_matches = sorted(
+            list(set([
+            QuoteClusterMatch(i, j) for i,j in np.concatenate(
+                (np.transpose(np.nonzero(arrays['quotes_persons'].dot(arrays['clusters_persons'].T))),
+                 np.transpose(np.nonzero(arrays['quotes_clusters'])))
+            )])), key=lambda m: m.quote_index
+        )
+
 def evaluate(a: Attributor):
     """
     Used to score results.
