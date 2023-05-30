@@ -1,6 +1,6 @@
 
 from .article_helpers import extract_soup, get_metadata, full_parse
-from .sayswho import Attributor
+from .sayswho import Attributor, evaluate
 from jinja2 import Environment, FileSystemLoader
 from spacy.tokens import Doc, Span
 from spacy import displacy
@@ -35,127 +35,91 @@ def render_data(
 
     return metadata
 
-
-def render_qa(a: Attributor):
-    ents = consolidate_ents(a)
-    return highlight_ents(a.ner_doc, ents)
-
-
-def highlight_ents(
-        doc: Doc, 
-        ents: Iterable[Span]) -> str:
-    """
-    Creates a HTML-ready text with ents highlighted in CSS.
-
-    Input:
-        doc (Doc) - spacy doc
-        ents (spans) - list/gen of spans tagged as entities by NER
-
-    Output:
-        html text with highlighted quotes and ents
-    """
-    output_text = []
-    i = 0
-
-    quote_num = 0
-
-    for e in ents:
-        output_text.append(doc[i:e.start].text)
-        labeled_text = parse_ent_for_replacing(e, quote_num)
-        if e.label_=="QUOTE":
-            quote_num += 1
-        output_text.append(labeled_text)
-        i = e.end
-    
-    if i < len(doc):
-        output_text.append(doc[i:].text)
-
-    return ' '.join(output_text)
-
-def consolidate_ents(a: Attributor) -> Iterable[Span]:
-    """
-    Combines and orders quotes and LE ents for HTML parsing.
-
-    Input:
-        a - quoteAttributor object
-
-    Ouput:
-        ents - list of QUOTE and LAW ENFORCEMENT entities sorted by start character
-    """
-    all_ents = list(a.ner_doc.ents) + [Span(a.ner_doc, q.content.start, q.content.end, "QUOTE") for q in a.quotes]
-    ents = sorted([e for e in all_ents], key=lambda e: e.start)
-    return ents
-
-def parse_ent_for_replacing(e: Span, n: int=0) -> str:
-    """
-    Formats entity into HTML code to insert via replace during HTML rendering
-
-    Only works for QUOTE and LAW ENFORCEMENT entities
-
-    Input:
-        e (Span) - NER-tagged entity
-        n (int) - index of entity (for linking)
-    
-    Output:
-        str - HTML-formatted entity or text of span
-    """
-    if e.label_=="QUOTE":
-        return f"<a name=\"quote{n}\"></a><a href=\"#{n}\"><span id=\"QUOTE\" style=\"background-color: lightyellow;\">{e.text}</span></a>"
-    
-    if e.label_=="LAW ENFORCEMENT":
-        return f"<span id=\"{e.label_}\" style=\"color: maroon;\">{e.text}</span>"
-
-    else:
-        return e.text
-
-
-def render_basic(data: dict) -> Iterable:
-    """
-    Extracts soup and article metatdata from raw article data, renders soup into HTML
-
-    Input:
-        data (dict) - lexis document query result
-
-    Output:
-        rendered (html) - render HTML of article
-        metadata (dict) - article metadata
-    """
-    soup = extract_soup(data)
-    metadata = get_metadata(soup)
-    metadata['bodytext'] = "<p>" + full_parse(data, "</p><p>") 
-    
+def render_new(a: Attributor, metadata: dict, color_key: dict, save_file: bool=False):
+    metadata['bodytext'] = render_attr_with_highlights(a, color_key)
+    metadata['quotes'] = yield_quotes(a)
+    metadata['score'] = {k:getattr(evaluate(a),k) for k in ['n_quotes', 'n_ent_quotes', 'n_ents_quoted']}
     rendered = Environment(
         loader=FileSystemLoader("./")
     ).get_template('article_template.html').render(metadata)
-    return rendered, metadata
+    
+    file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
 
+    with open(file_name, "w+") as f:
+        f.write(rendered)
+    return
 
-def render_quotes(
-        rendered: str, 
-        quotes: Iterable[DQTriple], 
-        color: str="LightGreen") -> str:
-    """
-    Renders quotes into HTML.
+def yield_quotes(a):
+    for quote_index, quote in enumerate(a.quotes):
+        for m in (qm for qm in a.quote_matches if qm.quote_index==quote_index):
+            base_dict = render_quote(quote)
+            base_dict['cluster_index'] = m.cluster_index
+            base_dict['cluster'] = ', '.join(
+                set([c.text for c in a.clusters[m.cluster_index] if c[0].pos_ !="PRON"])
+            )
+            try:
+                ent = next(em for em in a.ent_matches if em.quote_index==m.quote_index)
+                base_dict['ent_index'] = ent.ent_index
+                base_dict['ent'] = a.ents[ent.ent_index].text
+            except StopIteration:
+                pass
+            yield base_dict
 
-    Input:
-        rendered - HTML-rendered article
-        quotes (list) - list of textacy-extract quote triples
-        color (str) - css-friendly string for quote highlight color
+def render_quote_match(a, quote_match):
+    quote = render_quote(a.quotes[quote_match.quote_index])
+    quote['cluster'] = ', '.join(
+        set([c.text for c in a.clusters[quote_match.cluster_index] if c[0].pos_ !="PRON"])
+    )
+    return quote
 
-    Output:
-        rendered - HTML-rendered article with highlighted quotes
-    """
-    if quotes:
-        for n, quote in enumerate(quotes):
-            q_text = quote.content.text
-            rendered = rendered.replace(
-                q_text, 
-                f"<a name=\"quote{n}\"></a><a href=\"#{n}\"><span id=\"quote-highlight-{n}\" style=\"background-color: {color};\">{q_text}</span></a>",
-                1
-                )
-    return rendered
+def render_quote(quote):
+    return {
+            "content": quote.content,
+            "cue": "".join([t.text_with_ws for t in quote.cue]),
+    }
 
+def get_ent_quote_indexes(a: Attributor) -> list:
+    ent_idxs = [((e.start, e.end), e.label_, n) for n, e in enumerate(a.ents)]
+    quote_idxs = [((q.content.start, q.content.end), "QUOTE", n) for n, q in enumerate(a.quotes)]
+    indexes = sorted(ent_idxs+quote_idxs, key=lambda i: i[0])
+    return indexes
 
+def render_attr_with_highlights(a: Attributor, color_key: dict) -> str:
+    indexes = get_ent_quote_indexes(a)
+    text_bucket = ["<p>"]
+    for token in a.doc:
+        coded = False
+        if token.text == "\n":
+            token_text = "</p><p>"
+        else:
+            token_text = token.text_with_ws
+        for index_match in (i_ for i_ in indexes if token.i in i_[0]):
+            coded = True
+            match_indexes, label, n = index_match
+            start = not match_indexes.index(token.i)
+            html_code = generate_code(n, label, start, color_key)
+            text_bucket.append(html_code + token_text)
+        if not coded:
+            text_bucket.append(token_text)
+
+    text_bucket.append("</p>")
+    return "".join(text_bucket)
+
+def generate_code(
+    n: int, label: str, start: bool=True, color_key: dict={}
+) -> str:
+    color = color_key.get(label)
+    if label.lower()=='quote':
+        if start:
+            return f"<a name=\"quote{n}\"></a><a href=\"#{n}\"><span id=\"QUOTE\" style=\"background-color: {color};\">"
+        else:
+            return "</span></a>"
+    else:
+        if start:
+            return f"<span id=\"{label}\" style=\"color: {color};\">"
+        else:
+            return "</span>"
+        
 def double_viz(a: Attributor):
     """
     Displacy visualization of all quotes and law enforcement entities.
@@ -181,4 +145,7 @@ def double_viz(a: Attributor):
         page=True
     )
     return
+
+
+
 

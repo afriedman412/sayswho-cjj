@@ -35,6 +35,12 @@ Boundaries: tuple[int, int] = namedtuple(
     ['start', 'end']
 )
 
+
+color_key={
+    "QUOTE": "lightyellow",
+    "LAW ENFORCEMENT": "maroon"
+}
+
 """
 Constants for ent_like matching
 """

@@ -2,7 +2,7 @@
 Rewritten with less overhead.
 """
 import spacy
-from typing import Union
+from typing import Union, Iterable
 from rapidfuzz import fuzz
 import numpy as np
 from .attribution_helpers import (
@@ -23,6 +23,7 @@ from .constants import ent_like_words, ner_nlp, ent_like_words, QuoteEntMatch, Q
 class Attributor:
     """
     TODO: Add manual speaker matching
+    TODO: change self.clusters to be a list instead of a numerically indexed dict. (This is a holdover from the structure of the coref model output.)
     """
     def __init__(
             self, 
@@ -65,15 +66,22 @@ class Attributor:
                 ), key=lambda m: m[0]
                 )
         
-    def expand_match(self, match: Union[QuoteEntMatch, int]):
+    def expand_match(self, match: Union[QuoteEntMatch, Iterable, int]):
+        def expando(match):
+            for m_ in ['quote', 'cluster', 'person', 'ent']:
+                if getattr(match, f"{m_}_index", None) is not None:
+                    i = self.__getattribute__(f"{m_}s")
+                    v = getattr(match, f"{m_}_index")
+                    data = format_cluster(i[v]) if m_=="cluster" else i[v]
+                    print(m_.upper(), f": {v}""\n", data, "\n")
+
         if isinstance(match, int):
-            match = self.ent_matches[match]
-        for m_ in ['quote', 'cluster', 'person', 'ent']:
-            if getattr(match, f"{m_}_index", None) is not None:
-                i = self.__getattribute__(f"{m_}s")
-                v = getattr(match, f"{m_}_index")
-                data = format_cluster(i[v]) if m_=="cluster" else i[v]
-                print(m_.upper(), f": {v}""\n", data, "\n")
+            expando(self.ent_matches[match])
+        elif isinstance(match, list):
+            for m in match:
+                expando(m)
+        else:
+            expando(match)        
         
     def attribute(self, t: str):
         """
@@ -111,7 +119,7 @@ class Attributor:
 
         # extract coref clusters and clone to doc
         self.clusters = {
-            int(k.split("_")[-1]): clone_cluster(cluster, self.doc) 
+            int(k.split("_")[-1])-1: clone_cluster(cluster, self.doc) 
             for k, cluster in self.coref_doc.spans.items() 
             if k.startswith("coref")
             }
