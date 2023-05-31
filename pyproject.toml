@@ -17,8 +17,6 @@ bs4 = "^0.0.1"
 python-levenshtein = "^0.21.0"
 regex = "^2023.5.5"
 rapidfuzz = "^3.0.0"
-en_core_web_trf = {url = "https://github.com/explosion/spacy-experimental/releases/download/v0.6.1/en_coreference_web_trf-3.4.0a2-py3-none-any.whl"}
-en_core_web_lg = {url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.5.0/en_core_web_lg-3.5.0-py3-none-any.whl"}
 
 [build-system]
 requires = ["poetry-core"]
