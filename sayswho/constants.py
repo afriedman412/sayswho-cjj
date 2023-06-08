@@ -63,7 +63,7 @@ Constants for token/entity matching
 """
 min_speaker_diff = 5
 min_entity_diff = 2
-min_length = 0
+min_quote_length = 3
 
 """
 Constants for textacy quote identification

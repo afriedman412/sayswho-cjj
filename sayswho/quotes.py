@@ -6,7 +6,7 @@ Moved it here because it was easier than worrying about loading the right versio
 Consolidated into a class because it was easier than passing variables across functions.
 """
 from spacy.tokens import Doc
-from .constants import _ACTIVE_SUBJ_DEPS
+from .constants import _ACTIVE_SUBJ_DEPS, min_quote_length
 from .quote_helpers import (
     windower, filter_cue_candidates, filter_quote_tokens, 
     filter_speaker_candidates, expand_noun, expand_verb, 
@@ -16,7 +16,7 @@ from operator import attrgetter
 
 def direct_quotations(doc: Doc):
     qtok = get_qtok(doc)
-    qpairs = [(i,j) for i,j in get_qpairs(qtok) if j-i > 4]
+    qpairs = [(i,j) for i,j in get_qpairs(qtok) if j-i > min_quote_length]
 
     for i, j in qpairs:
         content = doc[i:j+1]
