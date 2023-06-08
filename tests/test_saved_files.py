@@ -15,7 +15,7 @@ def a_ner():
 
         # remove duplicate ents
         ('5V5C-JVP1-DY37-F4FC-00000-00', EvalResults(n_quotes=15, n_ent_quotes=5, n_ents_quoted=1)),
-        ('65SG-FK31-JC3R-B541-00000-00', EvalResults(n_quotes=9, n_ent_quotes=7, n_ents_quoted=1)),
+        ('65SG-FK31-JC3R-B541-00000-00', EvalResults(n_quotes=8, n_ent_quotes=6, n_ents_quoted=1)),
 
         # multiple ents per quote (??)
         ('5X5X-VPT1-DYNS-33VS-00000-00', EvalResults(n_quotes=1, n_ent_quotes=1, n_ents_quoted=1)),
@@ -24,15 +24,15 @@ def a_ner():
         ('5W5S-BDS1-JBM5-R229-00000-00', EvalResults(n_quotes=2, n_ent_quotes=2, n_ents_quoted=1)),
 
         # bad ordinals
-        ('5W64-5441-DYTG-S3T7-00000-00', EvalResults(n_quotes=22, n_ent_quotes=2, n_ents_quoted=1)),
+        ('5W64-5441-DYTG-S3T7-00000-00', EvalResults(n_quotes=21, n_ent_quotes=2, n_ents_quoted=1)),
 
         # quote detection, min_length
-        ('65RN-WFC1-DY8S-B509-00000-00', EvalResults(n_quotes=7, n_ent_quotes=0, n_ents_quoted=0)),
+        ('65RN-WFC1-DY8S-B509-00000-00', EvalResults(n_quotes=6, n_ent_quotes=0, n_ents_quoted=0)),
         ('5V49-J6V1-JC0C-J46G-00000-00', EvalResults(n_quotes=3, n_ent_quotes=0, n_ents_quoted=0)),
         ('5WXW-GBY1-JBRS-Y2HX-00000-00', EvalResults(n_quotes=7, n_ent_quotes=1, n_ents_quoted=1)),
 
         # paragraph issue fixed
-        ('5X4C-PYG1-DYJT-21WJ-00000-00', EvalResults(n_quotes=7, n_ent_quotes=2, n_ents_quoted=2)),
+        ('5X4C-PYG1-DYJT-21WJ-00000-00', EvalResults(n_quotes=6, n_ent_quotes=2, n_ents_quoted=2)),
 
         # "good not great" (??)
         ('5SVW-WWP1-JC6P-C282-00000-00', EvalResults(n_quotes=15, n_ent_quotes=2, n_ents_quoted=1)),

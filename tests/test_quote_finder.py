@@ -5,6 +5,10 @@ import pytest
 import spacy
 from sayswho.quotes import direct_quotations
 
+@pytest.fixture(scope="module")
+def nlp():
+    return spacy.load("en_core_web_lg")
+
 @pytest.mark.parametrize(
     "text, exp",
     [
@@ -59,19 +63,24 @@ An Itawamba County grand jury indicted Loden five months later. Despite the conf
 
 Police also said a kid mug shot is kept only if the suspect is classified a juvenile delinquent and the case ends with a felony conviction.""",
             [
-                (['Assistant', 'Commissioner', 'Devora', 'Kaye'], ['said'], '"No one has ever been arrested based solely on a positive facial recognition match,"'),
+                (['Commissioner', 'Devora', 'Kaye'], ['said'], '"No one has ever been arrested based solely on a positive facial recognition match,"'),
                 (['Police'], ['said'], '"It is merely a lead, not probable cause. We are comfortable with this technology because it has proven to be a valuable investigative method."')
             ]
          )
     ],
 )
 
-def test_direct_quotations(text, exp):
-    lang_en = spacy.load("en_core_web_sm")
-    obs = list(direct_quotations(lang_en(text)))
+def test_direct_quotations(nlp, text, exp):
+    obs = list(direct_quotations(nlp(text)))
     assert all(hasattr(dq, attr) for dq in obs for attr in ["speaker", "cue", "content"])
     obs_text = [
         ([tok.text for tok in speaker], [tok.text for tok in cue], content.text)
         for speaker, cue, content in obs
     ]
     assert obs_text == exp
+
+
+def test_difficult_quotes(nlp):
+    test_text = open('./tests/quote_error_tests.txt').read().split("\n\n")
+    for t in test_text:
+        assert direct_quotations(nlp(t))

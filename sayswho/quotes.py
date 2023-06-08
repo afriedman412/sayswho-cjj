@@ -16,7 +16,7 @@ from operator import attrgetter
 
 def direct_quotations(doc: Doc):
     qtok = get_qtok(doc)
-    qpairs = get_qpairs(qtok)
+    qpairs = [(i,j) for i,j in get_qpairs(qtok) if j-i > 2]
 
     for i, j in qpairs:
         content = doc[i:j+1]

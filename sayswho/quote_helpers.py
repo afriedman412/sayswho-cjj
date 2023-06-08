@@ -33,12 +33,12 @@ def get_qpairs(qtok: list):
     for n, q in enumerate(qtok):
         if not bool(q.whitespace_) and q.i not in [q_[1] for q_ in qtok_pair_idxs]:
             for q_ in qtok[n+1:]:
-                # try:
-                if (ord(q.text), ord(q_.text)) in QUOTATION_MARK_PAIRS:
-                    qtok_pair_idxs.append((q.i, q_.i))
-                    break
-                # except TypeError:
-                #     print(q.text, q_.text)
+                try:
+                    if (ord(q.text), ord(q_.text)) in QUOTATION_MARK_PAIRS:
+                        qtok_pair_idxs.append((q.i, q_.i))
+                        break
+                except TypeError:
+                    print(q.text, q_.text)
     return qtok_pair_idxs
 
 def expand_noun(tok: Token) -> list[Token]:
