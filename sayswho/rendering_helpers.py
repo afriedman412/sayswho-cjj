@@ -6,6 +6,7 @@ from spacy.tokens import Doc, Span
 from spacy import displacy
 from .quote_helpers import DQTriple
 from typing import Iterable
+import regex as re
 
 def render_data(
         data: dict, 
@@ -46,7 +47,11 @@ def render_new(a: Attributor, metadata: dict, color_key: dict, save_file: bool=F
     file_name = f"{metadata['doc_id']}.html" if save_file else "temp.html"
 
     with open(file_name, "w+") as f:
-        f.write(rendered)
+        try:
+            f.write(rendered)
+        except UnicodeDecodeError:
+            rendered = re.sub("\u2014", "-", rendered)
+            f.write(rendered)
     return
 
 def yield_quotes(a):

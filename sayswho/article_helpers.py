@@ -30,7 +30,7 @@ def load_doc(doc_id: str) -> dict:
     data = next(d for d in data if doc_id in d['ResultId'])
     return data
 
-def full_parse(data: dict, char: str=" ") -> str:
+def full_parse(data: dict, char: str=" ", fix_quotes=True) -> str:
     """
     TODO: biggest bodytext or both bodytext?
 
@@ -50,10 +50,14 @@ def full_parse(data: dict, char: str=" ") -> str:
     soup = extract_soup(data)
     bodytext = biggest_bodytext(soup)
     for p in bodytext.find_all("p"):
-        texts.append(fix_quotes(p.text.strip(), False))
+        if fix_quotes:
+            texts.append(fix_quotes(p.text.strip(), False))
+        else:
+            texts.append(p.text.strip())
 
     full_text = char.join(texts)
-    full_text = re.sub("\'\'", "\"", full_text)
+    if fix_quotes:
+        full_text = re.sub("\'\'", "\"", full_text)
     return full_text
 
 def extract_soup(data: dict):

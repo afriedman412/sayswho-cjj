@@ -49,7 +49,7 @@ def a_ner():
 )
 
 def test_ents(file_name, eval_result, a_ner):
-    a_ner.attribute(open(f"./tests/test_files/{file_name}.txt").read())
+    a_ner.attribute(open(f"./tests/quote_parse_test_files/{file_name}.txt").read())
     assert a_ner.ner
     e = evaluate(a_ner)
     print(a_ner.quotes)

@@ -12,6 +12,7 @@ parse_text.txt
 temp.html
 *0000-00.html
 qtok_breakout.py
+results/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

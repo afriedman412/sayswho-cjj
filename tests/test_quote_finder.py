@@ -5,7 +5,6 @@ import pytest
 import spacy
 from sayswho.quotes import direct_quotations
 
-
 @pytest.mark.parametrize(
     "text, exp",
     [
