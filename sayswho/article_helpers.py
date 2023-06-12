@@ -8,9 +8,8 @@ import json
 from bs4 import BeautifulSoup
 from collections import Counter
 import regex as re
-# from textacy import preprocessing
 import warnings
-from collections import namedtuple
+from .quote_helpers import prep_text_for_quote_detection
 from .constants import json_path, file_key
 
 def load_doc(doc_id: str) -> dict:
@@ -30,15 +29,14 @@ def load_doc(doc_id: str) -> dict:
     data = next(d for d in data if doc_id in d['ResultId'])
     return data
 
-def full_parse(data: dict, char: str=" ", fix_quotes_=True) -> str:
+def full_parse(data: dict, char: str="\n", exp: bool=False) -> str:
     """
     TODO: biggest bodytext or both bodytext?
 
     - extracts soup from articledata
     - finds biggest bodytext tag in soup
-    - makes list of all paragraph text in bodytext, formatting each text with fix_quote
+    - makes list of all paragraph text in bodytext
     - joins paragraphs with char and returns
-    - replaces "\'\'" with "\"", which causes problems with quote detection
 
     Input: 
         data (dict) - data of article as extracted from json archive file
@@ -46,18 +44,10 @@ def full_parse(data: dict, char: str=" ", fix_quotes_=True) -> str:
     Output: 
         full_text - article text, joined by char
     """
-    texts = []
     soup = extract_soup(data)
     bodytext = biggest_bodytext(soup)
-    for p in bodytext.find_all("p"):
-        if fix_quotes_:
-            texts.append(fix_quotes(p.text.strip(), False))
-        else:
-            texts.append(p.text.strip())
-
-    full_text = char.join(texts)
-    if fix_quotes_:
-        full_text = re.sub("\'\'", "\"", full_text)
+    full_text = char.join([p.text.strip() for p in bodytext.find_all("p")])
+    full_text = prep_text_for_quote_detection(full_text, "\n", exp=exp)
     return full_text
 
 def extract_soup(data: dict):
@@ -84,83 +74,6 @@ def biggest_bodytext(soup):
         longest bodytext object in soup
     """
     return sorted(soup.find_all("bodytext"), key= lambda t: len(t.text), reverse=True)[0]
-
-def fix_quotes(t: str, mask: str="@") -> str:
-    """
-    Adjusts quotation marks that are problematic for textacy.
-    - standardize fancy quotes
-    - add spaces pre- and post- quotation mark
-    - replace hanging s-plurals
-    - close quotation marks to paragraph breaks within quotes
-    - edit out internal quotes
-
-    TODO: try removing this, as most of this shouldn't matter anymore with improved quote parser
-
-    Masks single quotes with "@", to be replaced after quote parsing.
-
-    Input:
-        t (str) - article text
-        mask (str) - string to replace apostrophes with to hide from quote parser 
-
-    Output:
-        t (str) - article text with fixed quotations
-
-    TODO: revert internal quotes?
-    """
-    # # replace fancy quotes -- this shouldn't matter with fixed quotation mark arser
-    # t = preprocessing.normalize.quotation_marks(t)
-
-    # add space pre- or post- quotation mark if missing (because quote parser relies on the quote/space construction)
-    t = fix_bad_quote_spaces(t)
-
-    ## edit a couple gramatically correct constructions that confuse the quote parser
-    # replace hanging apostrophes on s-plurals with apostrophe-s
-    t = t.replace("s\' ", "s\'s ")
-
-    # add closing quotation marks to paragraph breaks within quotes
-    if Counter(t)['"'] % 2:
-        t += '\"'
-
-    # handle single quotation marks
-    # edit out internal quotes
-    # for r in re.finditer(r"\s\'(.+?)\'([\s\"])", t):
-    #     t = t.replace(r[0], " " + r[1] + r[2])
-    
-    # mark all remaining single quotation marks
-    if mask:
-        t = t.replace("\'", mask)
-
-    return t
-
-def fix_bad_quote_spaces(t: str, char: str='"') -> str:
-    """
-    Inserts a space before or after a quotation mark if it does not have one. 
-    Textacy quote parsing assumes quotations are \s\".+\"\s, so missing spaces will mess up parsing.
-
-    Counts number of quotation marks to determine whether to put the space before or after.
-
-    (Actually works for any character, but default is quotation mark.)
-
-    Input:
-        t (str) - text to be cleaned
-        char (str) - character to insert space before or after (default is quotation mark)
-
-    Output:
-        t (str) - cleaned article text
-    """
-    test_reg = r"(?<=\S)" + char + r"(?=\S)"
-    
-    # this needs to be iterative because indexes change
-    while re.search(test_reg, t):
-        # get char indexes
-        char_indexes = [n for n,i in enumerate(t) if i==char]    
-
-        bad_char = re.search(test_reg, t)
-        replacer = '" ' if char_indexes.index(bad_char.start()) % 2 else ' "'
-
-        t = t[:bad_char.start()] + replacer + t[bad_char.end():]
-    
-    return t
 
 def clean_article(t :str) -> str:
     """

@@ -72,15 +72,14 @@ def filter_duplicate_ents(ents) -> tuple:
     """
     Removes duplicate entities by text.
     """
-    ent_text = []
     ent_bucket = []
 
     for e in ents:
-        if e.text in ent_text:
+        if e.text in [e.text for e in ent_bucket]:
             continue
         else:
-            ent_text.append(e.text)
             ent_bucket.append(e)
+
     return ent_bucket
 
 def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
@@ -110,6 +109,7 @@ def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
     else:
         raise TypeError("input needs to be Token or Span!")
     
+    
 def get_text(t: Union[Token, Span, list]) -> str:
     """
     Convenience function, because quote speakers are lists of tokens.
@@ -118,6 +118,7 @@ def get_text(t: Union[Token, Span, list]) -> str:
         return t.text
     if isinstance(t, list):
         return ' '.join([t_.text for t_ in t])
+    
 
 def span_contains(
         t1: Union[Span, Token, DQTriple],
@@ -256,21 +257,6 @@ def compare_spans(
     return all([
             abs(getattr(s1, attr)-getattr(s2, attr)) < min_entity_diff for attr in ['start', 'end']
         ])
-
-def fancy_match_maker(a,
-        quote_person_pairs, 
-        quote_cluster_pairs, 
-        quote_ent_pairs,
-        cluster_ent_pairs,
-        cluster_person_pairs,
-        person_ent_pairs
-        ):
-    qp_m = make_mtx('quotes', 'persons', quote_person_pairs)
-    qc_m = make_mtx('quotes', 'clusters', quote_cluster_pairs)
-    qe_m = make_mtx('quotes', 'ents', quote_ent_pairs)
-    ce_m = make_mtx('clusters', 'ents', cluster_ent_pairs)
-    cp_m = make_mtx('clusters', 'persons', cluster_person_pairs)
-    pe_m = make_mtx('persons', 'ents', person_ent_pairs)
 
 
 def quick_ent_analyzer(

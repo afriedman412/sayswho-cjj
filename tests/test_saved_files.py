@@ -1,6 +1,9 @@
 import pytest
+import spacy
 from sayswho.sayswho import Attributor, evaluate
 from sayswho.constants import EvalResults
+
+spacy.prefer_gpu()
 
 @pytest.fixture(scope="module")
 def a_ner():

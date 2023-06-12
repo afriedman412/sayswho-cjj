@@ -2,7 +2,6 @@ from spacy.symbols import (aux, auxpass, csubj, dobj, neg, nsubj)
 import json
 from collections import namedtuple
 from spacy.tokens import Span
-import os
 
 # TODO: adjust this for remote functionality
 json_path = "../CJJ/query_work_files/query_results_2_2_23/"
@@ -72,6 +71,14 @@ _ACTIVE_SUBJ_DEPS = {csubj, nsubj, dobj}
 _VERB_MODIFIER_DEPS = {aux, auxpass, neg}
 
 """
+For prepping text for quote detection.
+"""
+all_quotes = '‹「`»」‘"„›”‚’\'』『«“'
+double_quotes = '‹「」»"„『”‚』›«“'
+brack_regex = r"[{}]"
+double_quotes_nospace_regex = r"(?<=\S)([{}])(?=\S)".format(double_quotes)
+
+"""
 Ordinal points of the token.is_quote characters, matched up by start and end.
 
 source:
@@ -102,7 +109,8 @@ QUOTATION_MARK_PAIRS = {
     (12302, 34),
     (8222, 34),
     (8218, 34),
-    (34, 8221)
+    (34, 8221),
+    (34, 8217) # " ’
     }
 
 _reporting_verbs = {
