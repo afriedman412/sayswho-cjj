@@ -28,12 +28,14 @@ def filter_speaker_candidates(ch, i, j):
 def filter_quote_tokens(tok: Token, qtok_idx_pairs: List[tuple]) -> bool:
     return any(qts_idx <= tok.i <= qte_idx for qts_idx, qte_idx in qtok_idx_pairs)
 
-def get_qtok_idx_pairs(input: Union[Doc, List[Token]]) -> List[tuple]:
+def get_qtok_idx_pairs(input: Union[Doc, List[Token]], exp: bool=False) -> List[tuple]:
     if isinstance(input, Doc):
         input = [tok for tok in input if tok.is_quote]
     qtok_idx_pairs = [(0,0)]
     for n, q in enumerate(input):
-        if q.i not in [q_[1] for q_ in qtok_idx_pairs] and not bool(q.whitespace_) and q.i > qtok_idx_pairs[-1][1]:
+        if q.i not in [q_[1] for q_ in qtok_idx_pairs] and q.i > qtok_idx_pairs[-1][1]:
+            if exp and bool(q.whitespace_):
+                continue
             for q_ in input[n+1:]:
                 if (ord(q.text), ord(q_.text)) in QUOTATION_MARK_PAIRS:
                     qtok_idx_pairs.append((q.i, q_.i))
@@ -109,8 +111,8 @@ def para_quote_fixer(p, exp: bool=False):
         else:
             replacer = ' "'
         p = p[:match.start()] + replacer + p[match.end():]
-        if orphan_quote_finder(p):
-            p += '"'
+    if orphan_quote_finder(p):
+        p += '"'
     return p.strip()
 
 def orphan_quote_finder(p):

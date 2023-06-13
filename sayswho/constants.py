@@ -76,7 +76,7 @@ For prepping text for quote detection.
 all_quotes = '‹「`»」‘"„›”‚’\'』『«“'
 double_quotes = '‹「」»"„『”‚』›«“'
 brack_regex = r"[{}]"
-double_quotes_nospace_regex = r"(?<=\S)([{}])(?=\S)".format(double_quotes)
+double_quotes_nospace_regex = r"(?<=^\S)([{}])(?=\S)".format(double_quotes)
 
 """
 Ordinal points of the token.is_quote characters, matched up by start and end.

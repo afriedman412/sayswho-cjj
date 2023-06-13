@@ -27,10 +27,11 @@ class Attributor:
     """
     def __init__(
             self, 
-            coref_nlp="en_coreference_web_trf",
-            base_nlp="en_core_web_lg",
-            ner_nlp=ner_nlp,
-            prune=True
+            coref_nlp: str="en_coreference_web_trf",
+            base_nlp: str="en_core_web_lg",
+            ner_nlp: str=ner_nlp,
+            prune: bool=True,
+            exp: bool=False
             ):
         self.coref_nlp = spacy.load(coref_nlp)
         self.base_nlp = spacy.load(base_nlp)
@@ -38,6 +39,7 @@ class Attributor:
             self.ner_nlp = spacy.load(ner_nlp)
             self.ner_nlp.add_pipe("sentencizer")
         self.prune = prune
+        self.exp = exp
 
     @property
     def ner(self):
@@ -115,7 +117,7 @@ class Attributor:
         self.doc = self.base_nlp(t)
 
         # extract quotations
-        self.quotes = [q for q in direct_quotations(self.doc)]
+        self.quotes = [q for q in direct_quotations(self.doc, self.exp)]
 
         # extract coref clusters and clone to doc
         self.clusters = {

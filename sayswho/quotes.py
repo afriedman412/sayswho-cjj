@@ -15,8 +15,8 @@ from spacy.tokens import Doc
 from spacy.symbols import VERB, PUNCT
 from operator import attrgetter
 
-def direct_quotations(doc: Doc):
-    qtok_idx_pairs = [(i,j) for i,j in get_qtok_idx_pairs(doc) if j-i > min_quote_length]
+def direct_quotations(doc: Doc, exp: bool=False):
+    qtok_idx_pairs = [(i,j) for i,j in get_qtok_idx_pairs(doc, exp) if j-i > min_quote_length]
 
     for i, j in qtok_idx_pairs:
         content = doc[i:j+1]
