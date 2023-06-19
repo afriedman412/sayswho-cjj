@@ -17,6 +17,7 @@ from .attribution_helpers import (
     get_manual_speaker_cluster
     )
 from .quotes import direct_quotations
+from .quote_class import Quoter
 from .quote_helpers import DQTriple
 from .constants import ent_like_words, ner_nlp, ent_like_words, QuoteEntMatch, QuoteClusterMatch, EvalResults
 

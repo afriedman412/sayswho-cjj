@@ -67,7 +67,7 @@ min_quote_length = 3
 """
 Constants for textacy quote identification
 """
-_ACTIVE_SUBJ_DEPS = {csubj, nsubj, dobj}
+_ACTIVE_SUBJ_DEPS = {csubj, nsubj}
 _VERB_MODIFIER_DEPS = {aux, auxpass, neg}
 
 """
@@ -76,7 +76,7 @@ For prepping text for quote detection.
 all_quotes = '‹「`»」‘"„›”‚’\'』『«“'
 double_quotes = '‹「」»"„『”‚』›«“'
 brack_regex = r"[{}]"
-double_quotes_nospace_regex = r"(?<=^\S)([{}])(?=\S)".format(double_quotes)
+double_quotes_nospace_regex = r"(?<=\S)([{}])(?=\S)".format(double_quotes)
 
 """
 Ordinal points of the token.is_quote characters, matched up by start and end.
@@ -102,7 +102,6 @@ QUOTATION_MARK_PAIRS = {
     (8220, 34),
     (8216, 34),
     (96, 34),
-    (8216, 34),
     (171, 34),
     (8249, 34),
     (12300, 34),
@@ -110,7 +109,14 @@ QUOTATION_MARK_PAIRS = {
     (8222, 34),
     (8218, 34),
     (34, 8221),
-    (34, 8217) # " ’
+    (34, 8217), # " ’
+    (34, 10),
+    (39, 10),
+    (96, 10),
+    (171, 10),
+    (8216, 10),
+    (8218, 10),
+    (8249, 10)
     }
 
 _reporting_verbs = {
