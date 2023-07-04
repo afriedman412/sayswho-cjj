@@ -1,4 +1,4 @@
-from .constants import min_entity_diff, min_speaker_diff, Boundaries, QuoteEntMatch, QuoteClusterMatch
+from .constants import MIN_ENTITY_DIFF, MIN_SPEAKER_DIFF, Boundaries, QuoteEntMatch, QuoteClusterMatch
 from .quote_helpers import DQTriple
 from spacy.tokens import Span, SpanGroup, Token, Doc
 from typing import Union, Literal, Tuple, Iterable
@@ -82,7 +82,7 @@ def filter_duplicate_ents(ents) -> tuple:
 
     return ent_bucket
 
-def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
+def get_boundaries(t: Union[Token, Span, list, DQTriple]) -> Boundaries:
     """
     Convenience function that returns a Boundaries tuple with the start and the end character of t.
 
@@ -97,17 +97,17 @@ def get_boundaries(t: Union[Token, Span, list]) -> Boundaries:
     if isinstance(t, Token):
         return Boundaries(t.idx, t.idx+len(t))
     
-    if isinstance(t, Span):
+    elif isinstance(t, Span):
         return Boundaries(t.start_char, t.end_char)
     
-    if isinstance(t, DQTriple):
+    elif isinstance(t, tuple): # isinstance won't recognize DQTriple
         return Boundaries(
             get_boundaries(t.speaker[0]).start,
             get_boundaries(t.speaker[-1]).end,
             )
     
     else:
-        raise TypeError("input needs to be Token or Span!")
+        raise TypeError("input needs to be Token, Span or DQTriple!")
     
     
 def get_text(t: Union[Token, Span, list]) -> str:
@@ -230,8 +230,8 @@ def compare_quote_to_cluster_member(
     # filters out very short strings
     if span[0].pos_ != "PRON" and len(span) < 2 and len(span[0]) < 4:
         return False
-    if abs(quote.speaker[0].sent.start_char - span.sent.start_char) < min_speaker_diff:
-        if abs(quote.speaker[0].idx - span.start_char) < min_speaker_diff:
+    if abs(quote.speaker[0].sent.start_char - span.sent.start_char) < MIN_SPEAKER_DIFF:
+        if abs(quote.speaker[0].idx - span.start_char) < MIN_SPEAKER_DIFF:
             return True
     if span.start_char <= quote.speaker[0].idx:
         if span.end_char >= (quote.speaker[-1].idx + len(quote.speaker[-1])):
@@ -255,7 +255,7 @@ def compare_spans(
 
     """
     return all([
-            abs(getattr(s1, attr)-getattr(s2, attr)) < min_entity_diff for attr in ['start', 'end']
+            abs(getattr(s1, attr)-getattr(s2, attr)) < MIN_ENTITY_DIFF for attr in ['start', 'end']
         ])
 
 

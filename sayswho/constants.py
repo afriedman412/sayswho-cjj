@@ -60,9 +60,9 @@ ent_like_words = [
 """
 Constants for token/entity matching
 """
-min_speaker_diff = 5
-min_entity_diff = 2
-min_quote_length = 3
+MIN_SPEAKER_DIFF = 5
+MIN_ENTITY_DIFF = 2
+MIN_QUOTE_LENGTH = 3
 
 """
 Constants for textacy quote identification
@@ -73,10 +73,10 @@ _VERB_MODIFIER_DEPS = {aux, auxpass, neg}
 """
 For prepping text for quote detection.
 """
-all_quotes = '‹「`»」‘"„›”‚’\'』『«“'
-double_quotes = '‹「」»"„『”‚』›«“'
-brack_regex = r"[{}]"
-double_quotes_nospace_regex = r"(?<=\S)([{}])(?=\S)".format(double_quotes)
+ALL_QUOTES = '‹「`»」‘"„›”‚’\'』『«“'
+DOUBLE_QUOTES = '‹「」»"„『”‚』›«“'
+BRACK_REGEX = r"[{}]"
+DOUBLE_QUOTES_NOSPACE_REGEX = r"(?<=\S)([{}])(?=\S)".format(DOUBLE_QUOTES)
 
 """
 Ordinal points of the token.is_quote characters, matched up by start and end.

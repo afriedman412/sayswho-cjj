@@ -5,7 +5,7 @@ from spacy.tokens import Doc, Span, Token
 from typing import Iterable, Union, List, Literal
 from .constants import (
     _reporting_verbs, _VERB_MODIFIER_DEPS, QUOTATION_MARK_PAIRS, 
-    all_quotes, brack_regex, double_quotes, double_quotes_nospace_regex,
+    ALL_QUOTES, BRACK_REGEX, DOUBLE_QUOTES, DOUBLE_QUOTES_NOSPACE_REGEX,
     )
 from spacy.symbols import VERB, PUNCT
 
@@ -127,17 +127,17 @@ def para_quote_fixer(p, exp: bool=False):
     p = p.replace("\'\'", "\"")
     p = re.sub(r"(.{3,8}s\')(\s)", r"\1x\2", p)
 
-    while re.search(double_quotes_nospace_regex, p):
-        match = re.search(double_quotes_nospace_regex, p)
-        if len(re.findall(brack_regex.format(double_quotes), p[:match.start()])) % 2 != 0:
+    while re.search(DOUBLE_QUOTES_NOSPACE_REGEX, p):
+        match = re.search(DOUBLE_QUOTES_NOSPACE_REGEX, p)
+        if len(re.findall(BRACK_REGEX.format(DOUBLE_QUOTES), p[:match.start()])) % 2 != 0:
             replacer = '" '
         else:
             replacer = ' "'
         p = p[:match.start()] + replacer + p[match.end():]
     if (
         not (p[0] == "'" and p[-1] == "'") 
-        and p[0] in all_quotes 
-        and len(re.findall(brack_regex.format(double_quotes), p[1:])) % 2 == 0
+        and p[0] in ALL_QUOTES 
+        and len(re.findall(BRACK_REGEX.format(DOUBLE_QUOTES), p[1:])) % 2 == 0
         ):
         p += '"'
     return p
